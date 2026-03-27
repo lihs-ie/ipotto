@@ -1,0 +1,45 @@
+# Rust
+/services/target/
+
+# Node.js
+node_modules/
+
+# Build outputs
+/_build/
+.next/
+dist/
+
+# Test / Coverage
+lcov.info
+test-results/
+playwright-report/
+blob-report/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# pnpm
+.pnpm-debug.log*
+
+# Claude Code
+.claude/settings.local.json
+.claude/plans/
+
+# Packaged skill
+*.skill

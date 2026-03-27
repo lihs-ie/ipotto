@@ -1,0 +1,422 @@
+<html><head><link rel="stylesheet" href="/member/css/fund.css?202603191720" type="text/css">
+<link rel="stylesheet" href="/member/assets/sure/css/sure-pcmm.min.css?202603191720" type="text/css">
+<link rel="stylesheet" href="/member/assets/sure/css/sure-icon.css?202603191720" type="text/css">
+<link rel="stylesheet" href="/member/css/pcmm_acc-info/pcmm_acc-info.min.css?202603191720" type="text/css">
+<link rel="stylesheet" href="/member/css/pcmm_emoji/pcmm_emoji.min.css?202603191720" type="text/css">
+<link rel="stylesheet" href="/member/assets/gl/css/gl.min.css?202603191720" media="all" type="text/css">
+<script async="" src="https://www.googletagmanager.com/gtm.js?id=GTM-5J8CZTV"></script><script type="text/javascript" src="/member/js/jquery.min.js?202603191720"></script>
+<script type="text/javascript" src="/member/js/memberPageJump.js?202603191720"></script>
+<script type="text/javascript" src="/member/js/com_page_child.js?202603191720"></script>
+
+
+
+
+<style>
+.err_msg,.error_filed,.success_filed{
+	display:none;
+}
+</style>
+
+<script>
+
+document.ondragstart = function(){return false;};
+
+var reSendFlag = false ;
+var submitFlag = false ;
+
+$(function(){
+	if(!"" == ""){
+		$(".err_msg").css("display","block");
+		$(".success_filed").css("display","none");
+		$(".error_valid").css("display","block");
+		$(".pcmm_emoji-img__block").addClass("pcmm_emoji--is-error");
+	}else{
+		$(".err_msg").css("display","none");
+		$(".success_filed").css("display","block");
+	}
+	
+	SotpLoginForOtherChannelForm.selectImageNo1.value = "";
+	SotpLoginForOtherChannelForm.selectImageNo2.value = "";
+})
+
+function emojiClick(id,index, src){
+	if($(".pcmm_emoji-img__1").attr("id") == undefined){
+		$("#" + id).addClass("pcmm_emoji-img__1");
+		$("#select_1").append("<img src=" + src + " class='pcmm_emoji-img--thumb'>");
+		SotpLoginForOtherChannelForm.selectImageNo1.value = index;
+	}else if($(".pcmm_emoji-img__2").attr("id") == undefined){
+		if(!$("#" + id).hasClass("pcmm_emoji-img__1")){
+			$("#" + id).addClass("pcmm_emoji-img__2");
+			$("#select_2").append("<img src=" + src + " class='pcmm_emoji-img--thumb'>");
+			SotpLoginForOtherChannelForm.selectImageNo2.value = index;
+		}
+	}
+}
+
+/**
+ * 絵文字クリック処理 (alt属性付与バージョン)
+ */
+function emojiAltClick(id, index, src, charaWord){
+	var altTag = " alt='" + charaWord + "'";
+
+	if($(".pcmm_emoji-img__1").attr("id") == undefined){
+		$("#" + id).addClass("pcmm_emoji-img__1");
+		$("#select_1").append("<img src=" + src + " class='pcmm_emoji-img--thumb'" + altTag + ">");
+		SotpLoginForOtherChannelForm.selectImageNo1.value = index;
+	}else if($(".pcmm_emoji-img__2").attr("id") == undefined){
+		if(!$("#" + id).hasClass("pcmm_emoji-img__1")){
+			$("#" + id).addClass("pcmm_emoji-img__2");
+			$("#select_2").append("<img src=" + src + " class='pcmm_emoji-img--thumb'" + altTag + ">");
+			SotpLoginForOtherChannelForm.selectImageNo2.value = index;
+		}
+	}
+}
+
+function clearEmoji(){
+	$(".pcmm_emoji-img__1").removeClass("pcmm_emoji-img__1");
+	$(".pcmm_emoji-img__2").removeClass("pcmm_emoji-img__2");
+	$("#select_1").empty();
+	$("#select_2").empty();
+	SotpLoginForOtherChannelForm.selectImageNo1.value = "";
+	SotpLoginForOtherChannelForm.selectImageNo2.value = "";
+}
+
+function check(){
+	
+	if( submitFlag ) {
+		return false ;
+	}
+	
+	if($("#selectImageNo1").val() == "" || $("#selectImageNo2").val() == ""){
+		$(".pcmm_emoji-img__block").addClass("pcmm_emoji--is-error");
+		$(".error_filed").css("display","block");
+		$(".success_filed").css("display","none");
+		$(".err_msg").css("display","none");
+		return false;
+	}
+	
+	submitFlag = true ;
+	
+		SotpLoginForOtherChannelForm.eventType.value='checkBySetup';
+	
+	SotpLoginForOtherChannelForm.submit();
+}
+
+function reSend(){
+	
+	if( reSendFlag ) {
+		return false ;
+	}
+	reSendFlag = true ;
+	
+	
+		SotpLoginForOtherChannelForm.eventType.value='initBySetup';
+	
+	SotpLoginForOtherChannelForm.submit();
+	
+}
+
+// F5禁止
+window.document.onkeydown = function() {
+	if (event.keyCode == 116) {
+		return false;
+	}
+}
+
+</script>
+
+
+
+
+
+
+	<meta http-equiv="Content-Type" content="text/html; charset=EUC-JP">
+		
+		
+			<title>多要素認証設定 | 楽天証券[PC]</title>
+		
+</head>
+<body oncontextmenu="return false;">
+	
+		<header class="pcmm_emoji-hed" style="display: flex;min-width: 980px;">
+			<div class="pcmm_emoji-hed__block">
+			<a href="https://www.rakuten-sec.co.jp/" class="pcmm_emoji-hed-logo"><img src="https://member.rakuten-sec.co.jp/member/images/rc-h-logo@2x.png" srcset="https://member.rakuten-sec.co.jp/member/images/rc-h-logo@2x.png 2x,/member/images/rc-h-logo@3x.png 3x" alt="楽天証券" class="pcmm_emoji-hed-logo_img"></a>
+			<ul class="pcmm_emoji-hed-lists">
+					<li class="pcmm_emoji-hed-list"><a href="https://faq.rakuten-sec.co.jp/?query=ログインID・PW" class="pcmm_emoji-hed-list--link">よくあるご質問</a></li>
+					<li class="pcmm_emoji-hed-list"><a href="https://www.rakuten-sec.co.jp/" class="pcmm_emoji-hed-list--link">楽天証券ホーム</a></li>
+				</ul>
+			</div>
+		</header>
+	 
+	<div class="pcmm_emoji-heading" style="display: flex;min-width: 980px;">
+		<div class="pcmm_emoji-flex">
+			
+			
+				<h1 class="pcmm-typo--heading-lv1 pcmm--is-clr-font-white pcmm_emoji-typo--h1">ログイン追加認証（多要素認証）の設定</h1>
+			
+			<a href="https://www.rakuten-sec.co.jp/web/security/add_authentication/" class="pcmm-typo--regular-lv4 pcmm_emoji-heading-link" target="_blank" rel="noopener noreferrer">
+				<i class="rex-icon-help-outline pcmm-ico pcmm-ico--small pcmm_emoji-heading-ico"></i>画像認証でお困りの方</a>
+		</div>
+	</div>
+	<main class="pcmm_emoji-main">
+		<div class="pcmm_emoji-main__panel">
+			
+				<div class="flat-hdg-l1-01-container pcmm--is-mb-16">
+					<h1 class="hdg-l1-01"><span>ログイン追加認証の設定変更 / 認証コード画像選択</span></h1>
+				</div>
+			
+			<div class="pcmm_emoji-art pcmm_emoji--is-success success_filed" style="display: block;">
+				<p class="pcmm_emoji-art__txt">
+					<i class="rex-icon-check pcmm-ico"></i>l******v@gmail.com に認証コードを送信しました（送信日時：2026/03/26 19:55）
+				</p>
+			</div>
+			<div class="pcmm_emoji-art pcmm_emoji--is-error error_filed">
+				<p class="pcmm_emoji-art__txt">
+					<i class="rex-icon-warning-outline pcmm-ico"></i>選択いただいた認証コードが正しくありません。ご確認のうえ再度選択してください。
+				</p>
+			</div>
+			<div class="pcmm_emoji-art pcmm_emoji--is-error err_msg" style="display: none;">
+				<p class="pcmm_emoji-art__txt">
+					<i class="rex-icon-warning-outline pcmm-ico"></i>
+				</p>
+			</div>
+			
+			<div class="mbody"><!-- 編集可能領域 home/H000001-001-01.html -->
+<div class="editable-area">
+
+<p class="pcmm-typo--regular-lv5 pcmm-typo--bold">メールをご確認いただき、記載されている認証コードの画像を順番に選択してください。<br><span class="pcmm--is-dis-inline pcmm--is-clr-font-danger">認証に3回連続で失敗した場合は、口座がロックされますので、入力ミスにご注意ください。</span></p>
+
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-5J8CZTV');</script>
+<!-- End Google Tag Manager -->
+
+
+
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5J8CZTV"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+
+</div><!-- /.editable-area -->
+<!-- /編集可能領域 -->
+</div>
+			<p class="pcmm_emoji-error error_filed error_valid"><i class="rex-icon-warning-filled pcmm-ico"></i>認証コードの画像を選択してください</p> 
+			<div class="pcmm_emoji-img__block">
+				
+				
+				
+					
+				
+				
+				
+				
+				
+				
+				
+				<button class="pcmm_emoji-img" id="emoji_0" onclick="emojiClick('emoji_0','0','/sotp/v200/assets/emoji/conv/20260322/gif/1F97D.gif')">
+				 <img src="/sotp/v200/assets/emoji/conv/20260322/gif/1F97D.gif" class="pcmm_emoji-img--thumb">
+				</button>
+				
+				
+				
+				
+					
+				
+				
+				
+				
+				
+				
+				
+				<button class="pcmm_emoji-img" id="emoji_1" onclick="emojiClick('emoji_1','1','/sotp/v200/assets/emoji/conv/20260322/gif/1F62C.gif')">
+				 <img src="/sotp/v200/assets/emoji/conv/20260322/gif/1F62C.gif" class="pcmm_emoji-img--thumb">
+				</button>
+				
+				
+				
+				
+					
+				
+				
+				
+				
+				
+				
+				
+				<button class="pcmm_emoji-img" id="emoji_2" onclick="emojiClick('emoji_2','2','/sotp/v200/assets/emoji/conv/20260322/gif/1F326.gif')">
+				 <img src="/sotp/v200/assets/emoji/conv/20260322/gif/1F326.gif" class="pcmm_emoji-img--thumb">
+				</button>
+				
+				
+				
+				
+					
+				
+				
+				
+				
+				
+				
+				
+				<button class="pcmm_emoji-img" id="emoji_3" onclick="emojiClick('emoji_3','3','/sotp/v200/assets/emoji/conv/20260322/gif/1F9F9.gif')">
+				 <img src="/sotp/v200/assets/emoji/conv/20260322/gif/1F9F9.gif" class="pcmm_emoji-img--thumb">
+				</button>
+				
+				
+				
+				
+					
+				
+				
+				
+				
+				
+				
+				
+				<button class="pcmm_emoji-img" id="emoji_4" onclick="emojiClick('emoji_4','4','/sotp/v200/assets/emoji/conv/20260322/gif/1F6D5.gif')">
+				 <img src="/sotp/v200/assets/emoji/conv/20260322/gif/1F6D5.gif" class="pcmm_emoji-img--thumb">
+				</button>
+				
+				
+				
+				
+					
+				
+				
+				
+				
+				
+				
+				
+				<button class="pcmm_emoji-img" id="emoji_5" onclick="emojiClick('emoji_5','5','/sotp/v200/assets/emoji/conv/20260322/gif/1FAC0.gif')">
+				 <img src="/sotp/v200/assets/emoji/conv/20260322/gif/1FAC0.gif" class="pcmm_emoji-img--thumb">
+				</button>
+				
+				
+				
+				
+					
+				
+				
+				
+				
+				
+				
+				
+				<button class="pcmm_emoji-img" id="emoji_6" onclick="emojiClick('emoji_6','6','/sotp/v200/assets/emoji/conv/20260322/gif/26F9.gif')">
+				 <img src="/sotp/v200/assets/emoji/conv/20260322/gif/26F9.gif" class="pcmm_emoji-img--thumb">
+				</button>
+				
+				
+				
+				
+					
+				
+				
+				
+				
+				
+				
+				
+				<button class="pcmm_emoji-img" id="emoji_7" onclick="emojiClick('emoji_7','7','/sotp/v200/assets/emoji/conv/20260322/gif/6D.gif')">
+				 <img src="/sotp/v200/assets/emoji/conv/20260322/gif/6D.gif" class="pcmm_emoji-img--thumb">
+				</button>
+				
+				
+				
+				
+					
+				
+				
+				
+				
+				
+				
+				
+				<button class="pcmm_emoji-img" id="emoji_8" onclick="emojiClick('emoji_8','8','/sotp/v200/assets/emoji/conv/20260322/gif/1F92F.gif')">
+				 <img src="/sotp/v200/assets/emoji/conv/20260322/gif/1F92F.gif" class="pcmm_emoji-img--thumb">
+				</button>
+				
+				
+				
+				
+					
+				
+				
+				
+				
+				
+				
+				
+				<button class="pcmm_emoji-img" id="emoji_9" onclick="emojiClick('emoji_9','9','/sotp/v200/assets/emoji/conv/20260322/gif/1F577.gif')">
+				 <img src="/sotp/v200/assets/emoji/conv/20260322/gif/1F577.gif" class="pcmm_emoji-img--thumb">
+				</button>
+				
+				
+			</div>
+			
+			<form name="SotpLoginForOtherChannelForm" method="post" action="/app/sotp_login_for_other_channel.do;BV_SessionID=566D11B37E810730233BD82085BF19FE.4ebc3ccd"><input type="hidden" name="org.apache.struts.taglib.html.TOKEN" value="e5f9c843a6b527a0a75ffc0457eb6462">
+				<div class="pcmm_emoji-frm">
+					<div class="pcmm_emoji-img" id="select_1" tabindex="0"></div>
+					<div class="pcmm_emoji-img" id="select_2" tabindex="0"></div>
+					
+					<input type="reset" value="クリア" class="pcmm_emoji-btn pcmm_emoji-btn__clear" onclick="clearEmoji()">
+					
+				</div>
+				
+					
+					
+						<div class="pcmm_emoji-btn__block">
+						  <div class="pcmm_emoji-btn__block--col2">
+							<input type="submit" value="戻る" class="pcmm_emoji-btn pcmm_emoji-btn__return" onclick="if(checkDoubleSend()==false) return false;memberPageJump('/app/multi_factor_auth_setting.do;BV_SessionID=XXXXXXXXXX?eventType=back');return false;">
+						  </div>
+						  <div class="pcmm_emoji-btn__block--col2">
+							
+							<input type="button" value="設定する" class="pcmm_emoji-btn pcmm_emoji-btn__primary" onclick="check()">
+							<input type="button" value="認証コードを再送信する" class="pcmm_emoji-btn pcmm_emoji-btn__negative" onclick="reSend();">
+							
+						  </div>
+						</div>
+					
+				
+				<input type="hidden" name="eventType" value="">
+				<input type="hidden" name="selectImageNo1" value="" id="selectImageNo1">
+				<input type="hidden" name="selectImageNo2" value="" id="selectImageNo2">
+				<input type="hidden" name="mskMail" value="l******v@gmail.com">
+				<input type="hidden" name="limitMinits" value="2">
+				<input type="hidden" name="seqNo" value="1">
+				<input type="hidden" name="smtRouteFlg" value="0">
+				<input type="hidden" name="altFlg" value="0">
+				<input type="hidden" name="emojiMappingFlg" value="1">
+				<input type="hidden" name="activeMappingFlg" value="1">
+				<input type="hidden" name="emojiMappingDate" value="20260322">
+				<input type="hidden" name="loginRouteKbn" value="0">
+			</form>
+		</div>
+		<div class="pcmm_emoji-main__block pcmm_emoji-note">
+			<p class="pcmm_emoji-note__block" data-mark="※">認証コードの有効時間は2分となります。</p>
+		</div>
+	</main>
+	
+	
+		
+
+
+
+
+<footer class="pcmm_emoji-fot">
+	<p class="pcmm_emoji-fot__txt">
+		商号等：楽天証券株式会社／金融商品取引業者 関東財務局長（金商）第195号、商品先物取引業者<br>
+		加入協会：日本証券業協会、一般社団法人金融先物取引業協会、日本商品先物取引協会、一般社団法人第二種金融商品取引業協会、一般社団法人日本投資顧問業協会
+	</p>
+	<p class="pcmm_emoji-fot__copy">Copyright®&nbsp;Rakuten&nbsp;Securities,&nbsp;Inc.&nbsp;All&nbsp;Rights&nbsp;Reserved.</p>
+</footer>
+
+	
+
+
+</body></html>
