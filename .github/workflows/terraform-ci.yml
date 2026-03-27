@@ -1,0 +1,140 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TERRAFORM_VERSION: "1.14.8"
+
+jobs:
+  terraform-format:
+    name: Terraform Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Check format
+        run: terraform fmt -check -recursive terraform
+
+  terraform-validate:
+    name: Terraform Validate (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    needs: terraform-format
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [stg, prd]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform init (backend disabled)
+        run: terraform -chdir=terraform/environments/${{ matrix.environment }} init -backend=false -input=false -lockfile=readonly
+
+      - name: Terraform validate
+        run: terraform -chdir=terraform/environments/${{ matrix.environment }} validate
+
+  terraform-plan:
+    name: Terraform Plan (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    needs: terraform-validate
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    environment: ${{ matrix.github_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: stg
+            github_environment: STG
+          - environment: prd
+            github_environment: PRD
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Terraform init
+        run: terraform -chdir=terraform/environments/${{ matrix.environment }} init -input=false -lockfile=readonly -reconfigure
+
+      - name: Terraform plan
+        id: plan
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/environments/${{ matrix.environment }} plan -input=false -lock=false -no-color -out=tfplan
+
+      - name: Render plan
+        if: steps.plan.outcome == 'success'
+        run: terraform -chdir=terraform/environments/${{ matrix.environment }} show -no-color tfplan > terraform/environments/${{ matrix.environment }}/tfplan.txt
+
+      - name: Upload plan artifact
+        if: steps.plan.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ matrix.environment }}
+          path: terraform/environments/${{ matrix.environment }}/tfplan.txt
+          retention-days: 7
+
+      - name: Write summary
+        if: success() || failure()
+        run: |
+          {
+            echo "## Terraform Plan"
+            echo "- Environment: \`${{ matrix.environment }}\`"
+            echo "- Result: \`${{ steps.plan.outcome }}\`"
+            echo "- Artifact: \`terraform-plan-${{ matrix.environment }}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Fail on plan error
+        if: steps.plan.outcome != 'success'
+        run: exit 1
+
+  terraform-plan-skipped:
+    name: Terraform Plan Skipped
+    runs-on: ubuntu-latest
+    needs: terraform-validate
+    if: github.event.pull_request.head.repo.full_name != github.repository
+    steps:
+      - name: Explain skip
+        run: |
+          {
+            echo "## Terraform Plan"
+            echo "Fork からの PR では認証情報を使わないため、Terraform plan はスキップしました。"
+            echo "fmt / validate のみ実行しています。"
+          } >> "${GITHUB_STEP_SUMMARY}"

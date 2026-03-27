@@ -7,14 +7,6 @@ artifact_registry = {
 }
 
 service_accounts = {
-  frontend = {
-    account_id   = "ipo-frontend"
-    display_name = "IPOtto Frontend STG"
-    project_roles = [
-      "roles/logging.logWriter",
-      "roles/monitoring.metricWriter",
-    ]
-  }
   api = {
     account_id   = "ipo-api"
     display_name = "IPOtto API STG"
@@ -27,23 +19,10 @@ service_accounts = {
 }
 
 cloud_run_services = {
-  frontend = {
-    service_name            = "ipo-frontend"
-    service_account_key     = "frontend"
-    container_port          = 3000
-    cpu                     = "1"
-    memory                  = "256Mi"
-    min_instance_count      = 0
-    max_instance_count      = 1
-    timeout_seconds         = 300
-    max_concurrent_requests = 80
-    ingress                 = "all"
-    environment_variables = {}
-    invoker_members = ["allUsers"]
-  }
   api = {
     service_name            = "ipo-api"
     service_account_key     = "api"
+    image                   = "asia-northeast1-docker.pkg.dev/ipotto-stg/ipotto/ipo-api:d88e799a13137f801fd5d956aadb89dab4499743-amd64"
     container_port          = 8080
     cpu                     = "1"
     memory                  = "256Mi"
@@ -51,7 +30,7 @@ cloud_run_services = {
     max_instance_count      = 1
     timeout_seconds         = 300
     max_concurrent_requests = 80
-    ingress                 = "all"
+    ingress                 = "internal"
     environment_variables = {
       RUST_LOG = "info"
     }
