@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 RUN npm install -g firebase-tools
 
 WORKDIR /app
-COPY firebase.json .
+COPY firebase.json storage.rules ./
 
 EXPOSE 4000 8088 9099 9199
 
