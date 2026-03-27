@@ -57,7 +57,7 @@ jobs:
       - name: Build and push
         run: |
           IMAGE="${{ env.AR_REGISTRY }}/${{ matrix.service }}:${{ github.sha }}"
-          docker build -t "$IMAGE" -f "services/${{ matrix.service }}/Dockerfile" services
+          docker build -t "$IMAGE" -f "docker/${{ matrix.service }}/Dockerfile" services
           docker push "$IMAGE"
       - name: Deploy to Cloud Run
         run: |

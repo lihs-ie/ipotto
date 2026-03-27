@@ -2,7 +2,7 @@ services:
   ipo-api:
     build:
       context: ./services
-      dockerfile: ipo-api/Dockerfile
+      dockerfile: ../docker/ipo-api/Dockerfile
     ports:
       - "8080:8080"
     environment:
@@ -21,7 +21,7 @@ services:
   ipo-browser:
     build:
       context: ./services
-      dockerfile: ipo-browser/Dockerfile
+      dockerfile: ../docker/ipo-browser/Dockerfile
     ports:
       - "8081:8081"
     environment:
@@ -45,7 +45,7 @@ services:
   ipo-info-fetcher:
     build:
       context: ./services
-      dockerfile: ipo-info-fetcher/Dockerfile
+      dockerfile: ../docker/ipo-info-fetcher/Dockerfile
     ports:
       - "8082:8082"
     environment:
@@ -62,7 +62,7 @@ services:
   ipo-result-checker:
     build:
       context: ./services
-      dockerfile: ipo-result-checker/Dockerfile
+      dockerfile: ../docker/ipo-result-checker/Dockerfile
     ports:
       - "8083:8083"
     environment:
@@ -82,7 +82,7 @@ services:
   ipo-frontend:
     build:
       context: ./services
-      dockerfile: ipo-frontend/Dockerfile
+      dockerfile: ../docker/ipo-frontend/Dockerfile
     ports:
       - "3000:3000"
     environment:
