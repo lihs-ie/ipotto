@@ -1,0 +1,4 @@
+packages:
+  - ipo-frontend-shared
+  - ipo-frontend
+  - ipo-browser

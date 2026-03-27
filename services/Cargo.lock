@@ -773,7 +773,7 @@ name = "ipo-api"
 version = "0.1.0"
 dependencies = [
  "axum",
- "ipo-shared",
+ "ipo-backend-shared",
  "serde",
  "serde_json",
  "tokio",
@@ -782,11 +782,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ipo-backend-shared"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "ipo-info-fetcher"
 version = "0.1.0"
 dependencies = [
  "axum",
- "ipo-shared",
+ "ipo-backend-shared",
  "reqwest",
  "scraper",
  "serde",
@@ -801,24 +812,13 @@ name = "ipo-result-checker"
 version = "0.1.0"
 dependencies = [
  "axum",
- "ipo-shared",
+ "ipo-backend-shared",
  "reqwest",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "ipo-shared"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "uuid",
 ]
 
 [[package]]

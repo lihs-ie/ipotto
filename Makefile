@@ -51,9 +51,8 @@ setup-pubsub: ## Pub/Subエミュレータのトピック・サブスクリプ�
 setup-hooks: ## Git hooks（lefthook）インストール
 	lefthook install
 
-install: ## 全Node.jsサービスの依存関係インストール
-	cd services/ipo-browser && pnpm install
-	cd services/ipo-frontend && pnpm install
+install: ## 全Node.jsサービスの依存関係インストール（pnpm workspace）
+	cd services && pnpm install
 
 # ============================================================
 # Rust (services/)

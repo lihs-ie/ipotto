@@ -36,7 +36,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: services/${{ matrix.service }}/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
+          cache-dependency-path: services/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: services
+        run: pnpm install --frozen-lockfile
       - name: Audit
         run: pnpm audit --audit-level=moderate

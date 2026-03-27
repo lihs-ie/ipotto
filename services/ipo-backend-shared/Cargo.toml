@@ -1,5 +1,5 @@
 [package]
-name = "ipo-shared"
+name = "ipo-backend-shared"
 version = "0.1.0"
 edition = "2021"
 

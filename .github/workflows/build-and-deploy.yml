@@ -21,17 +21,19 @@ jobs:
           filters: |
             ipo-api:
               - 'services/ipo-api/**'
-              - 'services/ipo-shared/**'
+              - 'services/ipo-backend-shared/**'
             ipo-browser:
               - 'services/ipo-browser/**'
+              - 'services/ipo-frontend-shared/**'
             ipo-info-fetcher:
               - 'services/ipo-info-fetcher/**'
-              - 'services/ipo-shared/**'
+              - 'services/ipo-backend-shared/**'
             ipo-result-checker:
               - 'services/ipo-result-checker/**'
-              - 'services/ipo-shared/**'
+              - 'services/ipo-backend-shared/**'
             ipo-frontend:
               - 'services/ipo-frontend/**'
+              - 'services/ipo-frontend-shared/**'
 
   build-deploy:
     needs: changes

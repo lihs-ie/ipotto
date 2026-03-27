@@ -1,3 +1,3 @@
 [workspace]
-members = ["ipo-shared", "ipo-api", "ipo-info-fetcher", "ipo-result-checker"]
+members = ["ipo-backend-shared", "ipo-api", "ipo-info-fetcher", "ipo-result-checker"]
 resolver = "2"

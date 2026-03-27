@@ -13,6 +13,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "@ipotto/shared": "workspace:*",
     "express": "^5.2.0",
     "playwright": "^1.58.0"
   },

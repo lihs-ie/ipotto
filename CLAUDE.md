@@ -62,11 +62,13 @@ infrastructure/  ← 外部サービス実装・アダプター（最外層）
 ```
 services/
 ├── Cargo.toml              # Rust workspace root
+├── pnpm-workspace.yaml     # Node.js workspace root
 ├── rust-toolchain.toml     # Rustツールチェーン固定（1.94.1）
-├── ipo-shared/             # 共通ドメインモデル・ユーティリティ (Rust crate)
+├── ipo-backend-shared/     # バックエンド共通ドメインモデル (Rust crate)
 ├── ipo-api/                # REST API (Rust/Axum, port 8080)
 ├── ipo-info-fetcher/       # IPO情報スクレイピング (Rust, port 8082)
 ├── ipo-result-checker/     # 抽選結果確認 (Rust, port 8083)
+├── ipo-frontend-shared/    # フロントエンド共通ドメインモデル (@ipotto/shared)
 ├── ipo-browser/            # ブラウザ自動化 (Node.js/Playwright, port 8081)
 └── ipo-frontend/           # ダッシュボードUI (Next.js 16, port 3000)
 ```
