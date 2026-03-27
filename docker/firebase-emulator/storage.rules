@@ -1,3 +1,5 @@
+// WARNING: This file is for LOCAL EMULATOR USE ONLY.
+// DO NOT deploy to production. All read/write is unconditionally allowed.
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {

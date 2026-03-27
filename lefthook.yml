@@ -3,15 +3,15 @@ pre-commit:
   commands:
     rust-fmt:
       root: services/
-      glob: "*.rs"
+      glob: "**/*.rs"
       run: cargo fmt --all -- --check
     browser-lint:
       root: services/ipo-browser/
-      glob: "*.{ts,js}"
+      glob: "**/*.{ts,js}"
       run: pnpm lint
     frontend-lint:
       root: services/ipo-frontend/
-      glob: "*.{ts,tsx,js}"
+      glob: "**/*.{ts,tsx,js}"
       run: pnpm lint
 
 pre-push:

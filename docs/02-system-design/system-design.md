@@ -142,7 +142,7 @@ graph LR
 
 | レイヤー | 技術 | バージョン | 選定理由 |
 |---|---|---|---|
-| フロントエンド | Next.js (React) | 15.x | SSR対応、React Server Components、Cloud Runとの親和性 |
+| フロントエンド | Next.js (React) | ^16.2.1 | SSR対応、React Server Components、Cloud Runとの親和性 |
 | スタイリング | CSS Modules | - | Next.js標準サポート、スコープ付きCSS、追加依存なし |
 | バックエンドAPI | Rust / Axum | latest stable | 高性能、型安全、Towerエコシステムとの親和性 |
 | ブラウザ自動操作 | Node.js / Playwright | 22.x / latest | Playwrightの公式サポート言語。証券会社アダプターのマイクロサービスとして分離 |
