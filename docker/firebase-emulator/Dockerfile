@@ -11,6 +11,6 @@ RUN npm install -g firebase-tools
 WORKDIR /app
 COPY firebase.json .
 
-EXPOSE 4000 8088 9099
+EXPOSE 4000 8088 9099 9199
 
 CMD ["firebase", "emulators:start", "--project=ipotto-local"]
