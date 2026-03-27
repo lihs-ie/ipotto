@@ -35,6 +35,8 @@ jobs:
           exit 1
 
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: services/ipo-browser/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -99,6 +101,8 @@ jobs:
           exit 1
 
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: services/ipo-frontend/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24
