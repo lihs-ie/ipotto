@@ -30,11 +30,32 @@ IPOtto - 個人投資家向けIPO抽選申し込み自動化・管理Webアプ�
 
 ステータスフロー: 情報取得済 → 申込可能 → 申込済 → 当選/落選/補欠 → 購入済 → 売却済
 
-## 設計パターン
+## アーキテクチャパターン
 
-- **ヘキサゴナルアーキテクチャ（ポート＆アダプター）** - 証券会社抽象化（`SecuritiesBrokerPort`）、通知チャネル抽象化（`NotificationPort`）
-- **Adapterパターン** - 証券会社・通知チャネルの追加を既存コード変更なしで実現
+### Rustサービス — レイヤードアーキテクチャ
+
+```
+presentation/    ← HTTPハンドラ・ルーティング
+application/     ← ユースケース・DTO
+domain/          ← ドメインモデル・ポート（trait）
+infrastructure/  ← 永続化・外部サービス実装
+```
+
+依存方向: presentation → application → domain ← infrastructure
+
+### TypeScript/Node.jsサービス — オニオンアーキテクチャ
+
+```
+domain/          ← エンティティ・値オブジェクト・ポート（最内層、依存なし）
+application/     ← ユースケース・ハンドラ（domainのみに依存）
+infrastructure/  ← 外部サービス実装・アダプター（最外層）
+```
+
+依存方向: infrastructure → application → domain（内側への依存のみ）
+
+### 共通パターン
 - **Repositoryパターン** - データアクセス抽象化
+- **Adapterパターン** - 証券会社・通知チャネルの追加を既存コード変更なしで実現
 
 ## プロジェクト構成
 
