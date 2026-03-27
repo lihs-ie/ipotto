@@ -20,7 +20,8 @@ services:
 
   ipo-browser:
     build:
-      context: ./services/ipo-browser
+      context: ./services
+      dockerfile: ipo-browser/Dockerfile
     ports:
       - "8081:8081"
     environment:
@@ -80,7 +81,8 @@ services:
 
   ipo-frontend:
     build:
-      context: ./services/ipo-frontend
+      context: ./services
+      dockerfile: ipo-frontend/Dockerfile
     ports:
       - "3000:3000"
     environment:

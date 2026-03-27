@@ -57,11 +57,7 @@ jobs:
       - name: Build and push
         run: |
           IMAGE="${{ env.AR_REGISTRY }}/${{ matrix.service }}:${{ github.sha }}"
-          if [ "${{ matrix.service }}" = "ipo-browser" ] || [ "${{ matrix.service }}" = "ipo-frontend" ]; then
-            docker build -t "$IMAGE" "services/${{ matrix.service }}"
-          else
-            docker build -t "$IMAGE" -f "services/${{ matrix.service }}/Dockerfile" services
-          fi
+          docker build -t "$IMAGE" -f "services/${{ matrix.service }}/Dockerfile" services
           docker push "$IMAGE"
       - name: Deploy to Cloud Run
         run: |
