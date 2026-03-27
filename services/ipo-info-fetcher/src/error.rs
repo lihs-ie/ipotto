@@ -1,0 +1,1 @@
+// Application-level error types.

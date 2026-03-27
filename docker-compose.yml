@@ -1,0 +1,122 @@
+services:
+  ipo-api:
+    build:
+      context: ./services
+      dockerfile: ipo-api/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
+      - FIREBASE_AUTH_EMULATOR_HOST=firebase-emulator:9099
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - ALLOWED_EMAIL=test@example.com
+      - RUST_LOG=info
+    depends_on:
+      firebase-emulator:
+        condition: service_healthy
+      pubsub-emulator:
+        condition: service_started
+
+  ipo-browser:
+    build:
+      context: ./services/ipo-browser
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+      - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - MOCK_SERVER_URL=http://html-mock-server:80
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1g
+    depends_on:
+      firebase-emulator:
+        condition: service_healthy
+      pubsub-emulator:
+        condition: service_started
+      html-mock-server:
+        condition: service_started
+
+  ipo-info-fetcher:
+    build:
+      context: ./services
+      dockerfile: ipo-info-fetcher/Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      - PORT=8082
+      - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - RUST_LOG=info
+    depends_on:
+      firebase-emulator:
+        condition: service_healthy
+      pubsub-emulator:
+        condition: service_started
+
+  ipo-result-checker:
+    build:
+      context: ./services
+      dockerfile: ipo-result-checker/Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      - PORT=8083
+      - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - IPO_BROWSER_URL=http://ipo-browser:8081
+      - RUST_LOG=info
+    depends_on:
+      firebase-emulator:
+        condition: service_healthy
+      pubsub-emulator:
+        condition: service_started
+      ipo-browser:
+        condition: service_started
+
+  ipo-frontend:
+    build:
+      context: ./services/ipo-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://ipo-api:8080
+      - NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=firebase-emulator:9099
+      - NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
+    depends_on:
+      - ipo-api
+      - firebase-emulator
+
+  firebase-emulator:
+    build:
+      context: ./docker/firebase-emulator
+    ports:
+      - "4000:4000"
+      - "9099:9099"
+      - "8088:8088"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    command: >
+      gcloud beta emulators pubsub start
+      --host-port=0.0.0.0:8085
+      --project=ipotto-local
+    ports:
+      - "8085:8085"
+
+  html-mock-server:
+    image: nginx:alpine
+    ports:
+      - "8090:80"
+    volumes:
+      - ./services/ipo-browser/tests/fixtures/html:/usr/share/nginx/html:ro
