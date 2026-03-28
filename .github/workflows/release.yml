@@ -1,0 +1,175 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch tags
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin
+
+      - name: Resolve release PR
+        id: release_pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          pr_number="$(
+            gh api "repos/${REPOSITORY}/commits/${COMMIT_SHA}/pulls" \
+              -H "Accept: application/vnd.github+json" \
+              --jq '.[] | select(.base.ref == "main" and .head.ref == "develop" and .merged_at != null) | .number' \
+              | head -n 1
+          )"
+
+          if [ -z "${pr_number}" ]; then
+            echo "should_release=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "should_release=true" >> "${GITHUB_OUTPUT}"
+          echo "pr_number=${pr_number}" >> "${GITHUB_OUTPUT}"
+
+      - name: Detect existing tag on commit
+        id: existing_tag
+        if: steps.release_pr.outputs.should_release == 'true'
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          tag_name="$(git tag --points-at "${COMMIT_SHA}" | grep '^v' | head -n 1 || true)"
+          echo "tag_name=${tag_name}" >> "${GITHUB_OUTPUT}"
+
+      - name: Resolve next tag
+        id: next_tag
+        if: steps.release_pr.outputs.should_release == 'true' && steps.existing_tag.outputs.tag_name == ''
+        run: |
+          set -euo pipefail
+
+          previous_tag="$(git tag --list 'v*' --sort=-version:refname | head -n 1)"
+          echo "previous_tag=${previous_tag}" >> "${GITHUB_OUTPUT}"
+
+          if [ -z "${previous_tag}" ]; then
+            echo "tag_name=v0.1.0" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          version="${previous_tag#v}"
+          IFS='.' read -r major minor patch <<EOF
+          ${version}
+          EOF
+
+          case "${major}.${minor}.${patch}" in
+            ''|*[^0-9.]*|*.*.*.*)
+              echo "Unsupported tag format: ${previous_tag}" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "tag_name=v${major}.${minor}.$((patch + 1))" >> "${GITHUB_OUTPUT}"
+
+      - name: Collect release metadata
+        id: metadata
+        if: steps.release_pr.outputs.should_release == 'true' && steps.existing_tag.outputs.tag_name == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.release_pr.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          gh pr view "${PR_NUMBER}" \
+            --repo "${REPOSITORY}" \
+            --json title,body,url > release-pr.json
+
+          echo "pr_title=$(jq -r '.title' release-pr.json)" >> "${GITHUB_OUTPUT}"
+          echo "pr_url=$(jq -r '.url' release-pr.json)" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate release notes
+        if: steps.release_pr.outputs.should_release == 'true' && steps.existing_tag.outputs.tag_name == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG_NAME: ${{ steps.next_tag.outputs.tag_name }}
+          PREVIOUS_TAG: ${{ steps.next_tag.outputs.previous_tag }}
+          COMMIT_SHA: ${{ github.sha }}
+          PR_URL: ${{ steps.metadata.outputs.pr_url }}
+        run: |
+          set -euo pipefail
+
+          api_args=(
+            "repos/${REPOSITORY}/releases/generate-notes"
+            -f "tag_name=${TAG_NAME}"
+            -f "target_commitish=${COMMIT_SHA}"
+          )
+
+          if [ -n "${PREVIOUS_TAG}" ]; then
+            api_args+=(-f "previous_tag_name=${PREVIOUS_TAG}")
+          fi
+
+          gh api "${api_args[@]}" --jq '.body' > generated-release-notes.md
+
+          {
+            echo "## Release PR"
+            echo "- ${PR_URL}"
+            echo ""
+            echo "## リリース内容"
+            jq -r '.body' release-pr.json
+            echo ""
+            echo "## 自動生成されたリリースノート"
+            cat generated-release-notes.md
+          } > release-notes.md
+
+      - name: Create GitHub Release
+        if: steps.release_pr.outputs.should_release == 'true' && steps.existing_tag.outputs.tag_name == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.next_tag.outputs.tag_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          gh release create "${TAG_NAME}" \
+            --target "${COMMIT_SHA}" \
+            --title "${TAG_NAME}" \
+            --notes-file release-notes.md
+
+      - name: Write release summary
+        if: success() || failure()
+        env:
+          SHOULD_RELEASE: ${{ steps.release_pr.outputs.should_release }}
+          EXISTING_TAG: ${{ steps.existing_tag.outputs.tag_name }}
+          TAG_NAME: ${{ steps.next_tag.outputs.tag_name }}
+          PR_NUMBER: ${{ steps.release_pr.outputs.pr_number }}
+        run: |
+          {
+            echo "## Release"
+            echo "- Should release: \`${SHOULD_RELEASE}\`"
+            echo "- Release PR: \`${PR_NUMBER:-none}\`"
+            echo "- Existing tag on commit: \`${EXISTING_TAG:-none}\`"
+            echo "- Created tag: \`${TAG_NAME:-none}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
