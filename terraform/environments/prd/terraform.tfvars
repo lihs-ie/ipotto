@@ -22,7 +22,7 @@ service_accounts = {
       "roles/datastore.user",
       "roles/logging.logWriter",
       "roles/monitoring.metricWriter",
-      "roles/secretmanager.admin",
+      "roles/secretmanager.secretAccessor",
     ]
   }
   browser = {
@@ -71,8 +71,8 @@ cloud_run_services = {
     timeout_seconds         = 300
     max_concurrent_requests = 80
     ingress                 = "all"
-    environment_variables = {}
-    invoker_members = ["allUsers"]
+    environment_variables   = {}
+    invoker_members         = ["allUsers"]
   }
   api = {
     service_name            = "ipo-api"
@@ -105,7 +105,7 @@ cloud_run_services = {
     timeout_seconds         = 600
     max_concurrent_requests = 1
     ingress                 = "internal"
-    environment_variables = {}
+    environment_variables   = {}
   }
   info_fetcher = {
     service_name            = "ipo-info-fetcher"

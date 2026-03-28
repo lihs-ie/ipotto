@@ -71,6 +71,12 @@ resource "google_cloud_run_v2_service" "this" {
     percent = 100
     type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
   }
+
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image,
+    ]
+  }
 }
 
 resource "google_cloud_run_v2_service_iam_member" "invoker" {
