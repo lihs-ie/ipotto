@@ -120,46 +120,31 @@ jobs:
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
-      - name: Check plan credentials
-        id: credentials
-        env:
-          WIF_PROVIDER: ${{ secrets.WIF_PROVIDER }}
-          WIF_SERVICE_ACCOUNT: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-        run: |
-          set -euo pipefail
-
-          if [ -n "${WIF_PROVIDER}" ] && [ -n "${WIF_SERVICE_ACCOUNT}" ]; then
-            echo "available=true" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
-
-          echo "available=false" >> "${GITHUB_OUTPUT}"
-
       - name: Authenticate to Google Cloud
-        if: github.event.pull_request.head.repo.full_name == github.repository && steps.credentials.outputs.available == 'true'
+        if: github.event.pull_request.head.repo.full_name == github.repository && secrets.WIF_PROVIDER != '' && secrets.WIF_SERVICE_ACCOUNT != ''
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Terraform init
-        if: github.event.pull_request.head.repo.full_name == github.repository && steps.credentials.outputs.available == 'true'
+        if: github.event.pull_request.head.repo.full_name == github.repository && secrets.WIF_PROVIDER != '' && secrets.WIF_SERVICE_ACCOUNT != ''
         run: terraform -chdir=terraform/environments/${{ matrix.environment }} init -input=false -lockfile=readonly -reconfigure
 
       - name: Terraform plan
         id: plan
-        if: github.event.pull_request.head.repo.full_name == github.repository && steps.credentials.outputs.available == 'true'
+        if: github.event.pull_request.head.repo.full_name == github.repository && secrets.WIF_PROVIDER != '' && secrets.WIF_SERVICE_ACCOUNT != ''
         continue-on-error: true
         run: |
           set -euo pipefail
           terraform -chdir=terraform/environments/${{ matrix.environment }} plan -input=false -lock-timeout=300s -no-color -out=tfplan
 
       - name: Render plan
-        if: github.event.pull_request.head.repo.full_name == github.repository && steps.credentials.outputs.available == 'true' && steps.plan.outcome == 'success'
+        if: github.event.pull_request.head.repo.full_name == github.repository && secrets.WIF_PROVIDER != '' && secrets.WIF_SERVICE_ACCOUNT != '' && steps.plan.outcome == 'success'
         run: terraform -chdir=terraform/environments/${{ matrix.environment }} show -no-color tfplan > terraform/environments/${{ matrix.environment }}/tfplan.txt
 
       - name: Upload plan artifact
-        if: github.event.pull_request.head.repo.full_name == github.repository && steps.credentials.outputs.available == 'true' && steps.plan.outcome == 'success'
+        if: github.event.pull_request.head.repo.full_name == github.repository && secrets.WIF_PROVIDER != '' && secrets.WIF_SERVICE_ACCOUNT != '' && steps.plan.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan-${{ matrix.environment }}
@@ -167,7 +152,7 @@ jobs:
           retention-days: 7
 
       - name: Write plan summary
-        if: github.event.pull_request.head.repo.full_name == github.repository && steps.credentials.outputs.available == 'true' && (success() || failure())
+        if: github.event.pull_request.head.repo.full_name == github.repository && secrets.WIF_PROVIDER != '' && secrets.WIF_SERVICE_ACCOUNT != '' && (success() || failure())
         run: |
           {
             echo "## Terraform Plan"
@@ -177,11 +162,11 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Fail on plan error
-        if: github.event.pull_request.head.repo.full_name == github.repository && steps.credentials.outputs.available == 'true' && steps.plan.outcome != 'success'
+        if: github.event.pull_request.head.repo.full_name == github.repository && secrets.WIF_PROVIDER != '' && secrets.WIF_SERVICE_ACCOUNT != '' && steps.plan.outcome != 'success'
         run: exit 1
 
       - name: Write missing credentials summary
-        if: github.event.pull_request.head.repo.full_name == github.repository && steps.credentials.outputs.available != 'true'
+        if: github.event.pull_request.head.repo.full_name == github.repository && (secrets.WIF_PROVIDER == '' || secrets.WIF_SERVICE_ACCOUNT == '')
         run: |
           {
             echo "## Terraform Plan"
