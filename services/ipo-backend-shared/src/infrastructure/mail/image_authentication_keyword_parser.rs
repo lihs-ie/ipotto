@@ -1,16 +1,22 @@
+use std::sync::OnceLock;
+
 use regex::Regex;
 
 use crate::{domain::account::ImageAuthenticationKeyword, errors::DomainError};
+
+fn image_authentication_keyword_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"([^\s+]+)\s*\+\s*([^\s+]+)")
+            .expect("image authentication keyword regex must be valid")
+    })
+}
 
 /// Parses image authentication keywords from mail body text.
 pub fn parse_image_authentication_keyword(
     body: &str,
 ) -> Result<ImageAuthenticationKeyword, DomainError> {
-    let pattern =
-        Regex::new(r"([^\s+]+)\s*\+\s*([^\s+]+)").map_err(|error| DomainError::MailParseError {
-            reason: error.to_string(),
-        })?;
-    let captures = pattern
+    let captures = image_authentication_keyword_pattern()
         .captures(body)
         .ok_or_else(|| DomainError::MailParseError {
             reason: "could not extract two keywords separated by '+'".to_string(),
