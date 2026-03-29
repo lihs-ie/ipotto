@@ -737,9 +737,14 @@ dependencies = [
 name = "ipo-backend-shared"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "chrono",
  "serde",
  "thiserror 2.0.18",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
  "ulid",
 ]
 
