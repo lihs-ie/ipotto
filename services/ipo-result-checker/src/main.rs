@@ -12,5 +12,5 @@ async fn main() {
     let router = presentation::routes::create_router();
     run_http_service(config::HTTP_SERVICE_CONFIG, router)
         .await
-        .expect("failed to run http service");
+        .unwrap_or_else(|error| panic!("failed to run http service: {error}"));
 }

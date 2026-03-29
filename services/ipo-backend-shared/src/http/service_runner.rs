@@ -1,6 +1,7 @@
 use std::{env, error::Error, io, net::SocketAddr, num::ParseIntError};
 
 use axum::Router;
+use tracing::dispatcher;
 use tracing_subscriber::{fmt::SubscriberBuilder, EnvFilter};
 
 use super::http_service_config::HttpServiceConfig;
@@ -17,6 +18,10 @@ pub async fn run_http_service(
 }
 
 fn initialize_json_tracing() -> Result<(), Box<dyn Error + Send + Sync>> {
+    if dispatcher::has_been_set() {
+        return Ok(());
+    }
+
     SubscriberBuilder::default()
         .with_env_filter(EnvFilter::from_default_env())
         .json()
