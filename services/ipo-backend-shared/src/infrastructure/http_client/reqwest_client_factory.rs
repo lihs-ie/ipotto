@@ -28,13 +28,12 @@ impl ReqwestClientFactory {
         let builder = if self.config.keep_alive() {
             builder.pool_idle_timeout(Some(Duration::from_secs(90)))
         } else {
-            builder.pool_idle_timeout(Duration::from_secs(0))
+            builder.pool_idle_timeout(Some(Duration::ZERO))
         };
 
         builder
             .build()
-            .map_err(|error| DomainError::NotificationSendError {
-                channel_type: "http_client".to_string(),
+            .map_err(|error| DomainError::HttpClientError {
                 reason: error.to_string(),
             })
     }

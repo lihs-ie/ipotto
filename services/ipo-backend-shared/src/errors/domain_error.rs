@@ -78,6 +78,9 @@ pub enum DomainError {
     #[error("secret payload error: {reason}")]
     SecretPayloadError { reason: String },
 
+    #[error("http client error: {reason}")]
+    HttpClientError { reason: String },
+
     #[error("pubsub publish error: {reason}")]
     PubSubPublishError { reason: String },
 
@@ -107,4 +110,7 @@ pub enum DomainError {
 
     #[error("operation log validation error: {reason}")]
     OperationLogValidationError { reason: String },
+
+    #[error("session storage error: {reason}")]
+    SessionStorageError { reason: String },
 }

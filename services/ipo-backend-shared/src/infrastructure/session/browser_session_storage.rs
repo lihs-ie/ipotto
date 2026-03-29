@@ -40,27 +40,27 @@ impl BrowserSessionStorage {
         }
 
         for entry in
-            fs::read_dir(&self.base_directory).map_err(|error| DomainError::SecretPayloadError {
+            fs::read_dir(&self.base_directory).map_err(|error| DomainError::SessionStorageError {
                 reason: error.to_string(),
             })?
         {
-            let entry = entry.map_err(|error| DomainError::SecretPayloadError {
+            let entry = entry.map_err(|error| DomainError::SessionStorageError {
                 reason: error.to_string(),
             })?;
             let metadata = entry
                 .metadata()
-                .map_err(|error| DomainError::SecretPayloadError {
+                .map_err(|error| DomainError::SessionStorageError {
                     reason: error.to_string(),
                 })?;
             let modified =
                 metadata
                     .modified()
-                    .map_err(|error| DomainError::SecretPayloadError {
+                    .map_err(|error| DomainError::SessionStorageError {
                         reason: error.to_string(),
                     })?;
             if now.duration_since(modified).unwrap_or_default() > threshold {
                 fs::remove_dir_all(entry.path()).map_err(|error| {
-                    DomainError::SecretPayloadError {
+                    DomainError::SessionStorageError {
                         reason: error.to_string(),
                     }
                 })?;

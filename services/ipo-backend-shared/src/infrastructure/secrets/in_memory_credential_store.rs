@@ -3,26 +3,23 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use async_trait::async_trait;
-
 use crate::{acl::secrets::CredentialStorePort, errors::DomainError};
 
-/// Concrete credential store backed by an in-memory secret map.
+/// In-memory credential store for tests and local adapters.
 #[derive(Debug, Clone, Default)]
-pub struct SecretManagerCredentialStore {
+pub struct InMemoryCredentialStore {
     secrets: Arc<Mutex<BTreeMap<String, String>>>,
 }
 
-impl SecretManagerCredentialStore {
-    /// Creates a new credential store.
+impl InMemoryCredentialStore {
+    /// Creates a new in-memory credential store.
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-#[async_trait]
-impl CredentialStorePort for SecretManagerCredentialStore {
-    async fn save(&self, key: &str, value: &str) -> Result<(), DomainError> {
+impl CredentialStorePort for InMemoryCredentialStore {
+    fn save(&self, key: &str, value: &str) -> Result<(), DomainError> {
         self.secrets
             .lock()
             .map_err(|error| DomainError::SecretPayloadError {
@@ -32,7 +29,7 @@ impl CredentialStorePort for SecretManagerCredentialStore {
         Ok(())
     }
 
-    async fn get(&self, key: &str) -> Result<String, DomainError> {
+    fn get(&self, key: &str) -> Result<String, DomainError> {
         self.secrets
             .lock()
             .map_err(|error| DomainError::SecretPayloadError {
@@ -45,7 +42,7 @@ impl CredentialStorePort for SecretManagerCredentialStore {
             })
     }
 
-    async fn delete(&self, key: &str) -> Result<(), DomainError> {
+    fn delete(&self, key: &str) -> Result<(), DomainError> {
         self.secrets
             .lock()
             .map_err(|error| DomainError::SecretPayloadError {
@@ -55,7 +52,7 @@ impl CredentialStorePort for SecretManagerCredentialStore {
         Ok(())
     }
 
-    async fn exists(&self, key: &str) -> Result<bool, DomainError> {
+    fn exists(&self, key: &str) -> Result<bool, DomainError> {
         Ok(self
             .secrets
             .lock()

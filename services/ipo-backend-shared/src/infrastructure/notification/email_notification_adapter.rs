@@ -64,8 +64,7 @@ where
         self.validate_destination(destination)?;
         let api_key = self
             .credential_store
-            .get(sendgrid_api_key_secret_name())
-            .await?;
+            .get(sendgrid_api_key_secret_name())?;
         let to = destination.values().get("address").ok_or_else(|| {
             DomainError::InvalidChannelDestination {
                 channel_type: ChannelType::Email.as_str().to_string(),

@@ -3,8 +3,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use tokio::runtime::Handle;
-
 use crate::{
     acl::secrets::CredentialStorePort,
     domain::account::{
@@ -50,17 +48,6 @@ where
             credential_store,
         }
     }
-
-    fn block_on<F, T>(&self, future: F) -> Result<T, DomainError>
-    where
-        F: core::future::Future<Output = Result<T, DomainError>>,
-    {
-        Handle::try_current()
-            .map_err(|error| DomainError::SecretPayloadError {
-                reason: error.to_string(),
-            })?
-            .block_on(future)
-    }
 }
 
 impl<S> SecuritiesAccountRepository for FirestoreSecuritiesAccountRepository<S>
@@ -82,7 +69,7 @@ where
         let Some(document) = document else {
             return Ok(None);
         };
-        let payload = self.block_on(self.credential_store.get(&document.credential_secret_key))?;
+        let payload = self.credential_store.get(&document.credential_secret_key)?;
         let payload: AccountCredentialSecretPayload =
             serde_json::from_str(&payload).map_err(|error| DomainError::SecretPayloadError {
                 reason: error.to_string(),
@@ -98,7 +85,7 @@ where
         .map_err(|error| DomainError::SecretPayloadError {
             reason: error.to_string(),
         })?;
-        self.block_on(self.credential_store.save(&secret_key, &payload))?;
+        self.credential_store.save(&secret_key, &payload)?;
         self.documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
@@ -121,10 +108,7 @@ where
             .get(identifier.value())
             .cloned();
         if let Some(document) = document {
-            self.block_on(
-                self.credential_store
-                    .delete(&document.credential_secret_key),
-            )?;
+            self.credential_store.delete(&document.credential_secret_key)?;
             self.documents
                 .lock()
                 .map_err(|error| DomainError::FirestoreMappingError {

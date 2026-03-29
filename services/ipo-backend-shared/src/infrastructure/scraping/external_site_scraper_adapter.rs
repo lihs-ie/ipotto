@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use chrono::NaiveDate;
 use reqwest::Client;
 
 use crate::{
@@ -27,29 +26,31 @@ impl ExternalSiteScraperAdapter {
 #[async_trait]
 impl IpoStockScraperPort for ExternalSiteScraperAdapter {
     async fn scrape(&self) -> Result<Vec<ScrapedStock>, DomainError> {
-        let _ = self
+        let response_body = self
             .client
             .get(&self.base_url)
             .send()
+            .await
+            .and_then(|response| response.error_for_status())
+            .map_err(|error| DomainError::ScrapingError {
+                scraper_source: "external_site".to_string(),
+                reason: error.to_string(),
+            })?
+            .text()
             .await
             .map_err(|error| DomainError::ScrapingError {
                 scraper_source: "external_site".to_string(),
                 reason: error.to_string(),
             })?;
-        Ok(vec![ScrapedStock::new(
-            "Sample IPO",
-            Some("1234".to_string()),
-            "Growth",
-            "IT",
-            NaiveDate::from_ymd_opt(2026, 4, 1).expect("start"),
-            NaiveDate::from_ymd_opt(2026, 4, 5).expect("end"),
-            NaiveDate::from_ymd_opt(2026, 4, 7).expect("lottery"),
-            NaiveDate::from_ymd_opt(2026, 4, 10).expect("listing"),
-            1000,
-            1200,
-            Some(1100),
-            "楽天証券",
-            1000,
-        )])
+        if response_body.trim().is_empty() {
+            return Err(DomainError::ScrapingError {
+                scraper_source: "external_site".to_string(),
+                reason: "empty response body".to_string(),
+            });
+        }
+        Err(DomainError::ScrapingError {
+            scraper_source: "external_site".to_string(),
+            reason: "response parser not implemented yet".to_string(),
+        })
     }
 }
