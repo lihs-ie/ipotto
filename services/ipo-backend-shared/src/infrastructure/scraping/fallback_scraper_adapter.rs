@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use tracing::warn;
 
 use crate::{
     acl::scraping::{IpoStockScraperPort, ScrapedStock},
@@ -36,7 +37,20 @@ where
     async fn scrape(&self) -> Result<Vec<ScrapedStock>, DomainError> {
         match self.primary.scrape().await {
             Ok(stocks) => Ok(stocks),
-            Err(_) => self.fallback.scrape().await,
+            Err(primary_error) => {
+                warn!(
+                    error = ?primary_error,
+                    "primary scraper failed; attempting fallback"
+                );
+                self.fallback.scrape().await.map_err(|fallback_error| {
+                    DomainError::ScrapingError {
+                        scraper_source: "fallback".to_string(),
+                        reason: format!(
+                            "primary scrape failed: {primary_error}; fallback scrape failed: {fallback_error}"
+                        ),
+                    }
+                })
+            }
         }
     }
 }

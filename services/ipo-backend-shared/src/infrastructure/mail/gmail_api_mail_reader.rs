@@ -1,8 +1,11 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tokio::time::timeout;
 
 use crate::{
     acl::{mail::MailReaderPort, secrets::CredentialStorePort},
@@ -168,13 +171,18 @@ where
         &self,
         _mail_credential: &MailCredential,
         received_after: DateTime<Utc>,
-        _timeout_seconds: u32,
+        timeout_seconds: u32,
     ) -> Result<ImageAuthenticationKeyword, DomainError> {
-        let access_token = self.refresh_access_token().await?;
-        let response = self
-            .fetch_latest_message_body(&access_token, received_after)
-            .await?;
-        parse_image_authentication_keyword(&response)
+        let future = async {
+            let access_token = self.refresh_access_token().await?;
+            let response = self
+                .fetch_latest_message_body(&access_token, received_after)
+                .await?;
+            parse_image_authentication_keyword(&response)
+        };
+        timeout(Duration::from_secs(u64::from(timeout_seconds)), future)
+            .await
+            .map_err(|_| DomainError::MailRetrievalTimeout)?
     }
 }
 

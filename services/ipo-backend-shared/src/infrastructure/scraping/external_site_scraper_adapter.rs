@@ -27,12 +27,23 @@ impl ExternalSiteScraperAdapter {
         if let Ok(stocks) = serde_json::from_str::<Vec<ScrapedStock>>(response_body) {
             return Ok(stocks);
         }
+        let direct_error = serde_json::from_str::<Vec<ScrapedStock>>(response_body)
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_else(|| "unknown direct parse error".to_string());
         if let Ok(wrapper) = serde_json::from_str::<ScrapedStockResponse>(response_body) {
             return Ok(wrapper.stocks);
         }
+        let wrapped_error = serde_json::from_str::<ScrapedStockResponse>(response_body)
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_else(|| "unknown wrapped parse error".to_string());
+        let preview: String = response_body.chars().take(120).collect();
         Err(DomainError::ScrapingError {
             scraper_source: "external_site".to_string(),
-            reason: "failed to parse external site response".to_string(),
+            reason: format!(
+                "failed to parse external site response: direct={direct_error}; wrapped={wrapped_error}; preview={preview}"
+            ),
         })
     }
 }

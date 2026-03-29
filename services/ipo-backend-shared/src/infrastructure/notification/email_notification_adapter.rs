@@ -74,7 +74,7 @@ where
             .post("https://api.sendgrid.com/v3/mail/send")
             .bearer_auth(api_key)
             .json(&json!({
-                "from": {"email": self.from_address},
+                "from": {"email": self.from_address.as_str()},
                 "personalizations": [{"to": [{"email": to}]}],
                 "subject": message.subject,
                 "content": [{"type": "text/plain", "value": message.body}],
