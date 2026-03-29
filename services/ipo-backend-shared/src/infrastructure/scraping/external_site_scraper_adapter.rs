@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use reqwest::Client;
+use serde::Deserialize;
 
 use crate::{
     acl::scraping::{IpoStockScraperPort, ScrapedStock},
@@ -20,6 +21,19 @@ impl ExternalSiteScraperAdapter {
             client,
             base_url: base_url.into(),
         }
+    }
+
+    fn parse_response_body(&self, response_body: &str) -> Result<Vec<ScrapedStock>, DomainError> {
+        if let Ok(stocks) = serde_json::from_str::<Vec<ScrapedStock>>(response_body) {
+            return Ok(stocks);
+        }
+        if let Ok(wrapper) = serde_json::from_str::<ScrapedStockResponse>(response_body) {
+            return Ok(wrapper.stocks);
+        }
+        Err(DomainError::ScrapingError {
+            scraper_source: "external_site".to_string(),
+            reason: "failed to parse external site response".to_string(),
+        })
     }
 }
 
@@ -48,9 +62,11 @@ impl IpoStockScraperPort for ExternalSiteScraperAdapter {
                 reason: "empty response body".to_string(),
             });
         }
-        Err(DomainError::ScrapingError {
-            scraper_source: "external_site".to_string(),
-            reason: "response parser not implemented yet".to_string(),
-        })
+        self.parse_response_body(&response_body)
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct ScrapedStockResponse {
+    stocks: Vec<ScrapedStock>,
 }

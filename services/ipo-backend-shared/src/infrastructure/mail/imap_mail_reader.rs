@@ -67,7 +67,10 @@ where
                 break;
             }
             let remaining = limit - elapsed;
-            let sleep_seconds = self.polling_config.polling_interval_seconds().min(remaining);
+            let sleep_seconds = self
+                .polling_config
+                .polling_interval_seconds()
+                .min(remaining);
             sleep(Duration::from_secs(sleep_seconds.into())).await;
             elapsed += sleep_seconds;
         }

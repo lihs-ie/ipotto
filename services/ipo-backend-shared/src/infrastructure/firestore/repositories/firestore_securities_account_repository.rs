@@ -108,7 +108,8 @@ where
             .get(identifier.value())
             .cloned();
         if let Some(document) = document {
-            self.credential_store.delete(&document.credential_secret_key)?;
+            self.credential_store
+                .delete(&document.credential_secret_key)?;
             self.documents
                 .lock()
                 .map_err(|error| DomainError::FirestoreMappingError {
@@ -120,21 +121,27 @@ where
     }
 
     fn find_all(&self) -> Result<Vec<SecuritiesAccount>, DomainError> {
-        let identifiers: Vec<SecuritiesAccountIdentifier> = self
+        let documents: Vec<SecuritiesAccountDocument> = self
             .documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
                 reason: error.to_string(),
             })?
-            .keys()
+            .values()
             .cloned()
-            .map(SecuritiesAccountIdentifier::new)
-            .collect::<Result<_, _>>()?;
-        identifiers
-            .iter()
-            .map(|identifier| self.find_by_id(identifier))
-            .collect::<Result<Vec<_>, _>>()
-            .map(|accounts| accounts.into_iter().flatten().collect())
+            .collect();
+
+        documents
+            .into_iter()
+            .map(|document| {
+                let payload = self.credential_store.get(&document.credential_secret_key)?;
+                let payload: AccountCredentialSecretPayload = serde_json::from_str(&payload)
+                    .map_err(|error| DomainError::SecretPayloadError {
+                        reason: error.to_string(),
+                    })?;
+                document.to_domain(payload.to_domain()?)
+            })
+            .collect()
     }
 
     fn find_active(&self) -> Result<Vec<SecuritiesAccount>, DomainError> {

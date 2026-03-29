@@ -1,5 +1,6 @@
 use std::{
     fs,
+    io::ErrorKind,
     path::PathBuf,
     time::{Duration, SystemTime},
 };
@@ -39,14 +40,23 @@ impl BrowserSessionStorage {
             return Ok(0);
         }
 
-        for entry in
-            fs::read_dir(&self.base_directory).map_err(|error| DomainError::SessionStorageError {
+        for entry in fs::read_dir(&self.base_directory).map_err(|error| {
+            DomainError::SessionStorageError {
                 reason: error.to_string(),
-            })?
-        {
+            }
+        })? {
             let entry = entry.map_err(|error| DomainError::SessionStorageError {
                 reason: error.to_string(),
             })?;
+            let file_type =
+                entry
+                    .file_type()
+                    .map_err(|error| DomainError::SessionStorageError {
+                        reason: error.to_string(),
+                    })?;
+            if !file_type.is_dir() {
+                continue;
+            }
             let metadata = entry
                 .metadata()
                 .map_err(|error| DomainError::SessionStorageError {
@@ -59,11 +69,15 @@ impl BrowserSessionStorage {
                         reason: error.to_string(),
                     })?;
             if now.duration_since(modified).unwrap_or_default() > threshold {
-                fs::remove_dir_all(entry.path()).map_err(|error| {
-                    DomainError::SessionStorageError {
-                        reason: error.to_string(),
+                match fs::remove_dir_all(entry.path()) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                    Err(error) => {
+                        return Err(DomainError::SessionStorageError {
+                            reason: error.to_string(),
+                        });
                     }
-                })?;
+                }
                 deleted += 1;
             }
         }

@@ -31,7 +31,7 @@ pub struct OperationLogPayload {
 }
 
 impl OperationLogPayload {
-    /// Creates a validated operation log payload.
+    /// Creates an operation log payload.
     pub fn new(
         application: Option<ApplicationIdentifier>,
         event_type: OperationEventType,
