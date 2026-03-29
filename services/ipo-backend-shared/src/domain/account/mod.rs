@@ -1,6 +1,7 @@
 pub mod account_activation;
 pub mod account_credential;
 pub mod connection_test_result;
+pub mod image_authentication_keyword;
 pub mod imap_host;
 pub mod imap_port;
 pub mod login_id;
@@ -16,6 +17,7 @@ pub mod trading_password;
 pub use account_activation::AccountActivation;
 pub use account_credential::AccountCredential;
 pub use connection_test_result::ConnectionTestResult;
+pub use image_authentication_keyword::ImageAuthenticationKeyword;
 pub use imap_host::ImapHost;
 pub use imap_port::ImapPort;
 pub use login_id::LoginId;

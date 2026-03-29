@@ -88,4 +88,9 @@ impl NotificationChannel {
     pub fn enabled(&self) -> bool {
         self.enabled
     }
+
+    /// Returns the subscription map.
+    pub fn subscriptions(&self) -> &BTreeMap<NotificationEventType, bool> {
+        &self.subscriptions
+    }
 }
