@@ -1,9 +1,11 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::errors::DomainError;
 
 /// Mail address for image authentication email retrieval.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MailAddress(String);
 
 impl MailAddress {
@@ -27,5 +29,14 @@ impl MailAddress {
     /// Returns the inner value.
     pub fn value(&self) -> &str {
         &self.0
+    }
+}
+
+impl fmt::Debug for MailAddress {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MailAddress")
+            .field("value", &"********")
+            .finish()
     }
 }

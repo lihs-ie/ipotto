@@ -54,7 +54,7 @@ impl Exclusion {
 
     /// Returns whether the exclusion matches the stock.
     pub fn matches(&self, stock: &IpoStock) -> bool {
-        self.company_name == *stock.company_profile().company_name()
+        &self.company_name == stock.company_profile().company_name()
     }
 
     /// Returns the identifier.

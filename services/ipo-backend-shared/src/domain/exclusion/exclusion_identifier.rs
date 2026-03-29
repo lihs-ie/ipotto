@@ -5,6 +5,7 @@ use crate::errors::DomainError;
 
 /// Identifier for an exclusion aggregate.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct ExclusionIdentifier(String);
 
 impl ExclusionIdentifier {
@@ -26,5 +27,19 @@ impl ExclusionIdentifier {
     /// Returns the raw identifier value.
     pub fn value(&self) -> &str {
         &self.0
+    }
+}
+
+impl TryFrom<String> for ExclusionIdentifier {
+    type Error = DomainError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl From<ExclusionIdentifier> for String {
+    fn from(value: ExclusionIdentifier) -> Self {
+        value.0
     }
 }

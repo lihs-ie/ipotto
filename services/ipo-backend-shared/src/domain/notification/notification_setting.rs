@@ -80,14 +80,14 @@ impl NotificationSetting {
         channel_id: &ChannelIdentifier,
         destination: ChannelDestination,
     ) -> Result<(), DomainError> {
-        if let Some(channel) = self
+        let channel = self
             .channels
             .iter_mut()
             .find(|channel| channel.identifier() == channel_id)
-        {
-            channel.update_destination(destination)?;
-        }
-        Ok(())
+            .ok_or_else(|| DomainError::NotificationChannelNotFound {
+                channel_id: channel_id.value().to_string(),
+            })?;
+        channel.update_destination(destination)
     }
 
     /// Returns active channels for the specified event.
@@ -163,8 +163,11 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::NotificationSetting;
-    use crate::domain::notification::{
-        ChannelDestination, ChannelType, NotificationChannel, NotificationEventType,
+    use crate::{
+        domain::notification::{
+            ChannelDestination, ChannelType, NotificationChannel, NotificationEventType,
+        },
+        errors::DomainError,
     };
 
     fn build_channel(channel_type: ChannelType) -> NotificationChannel {
@@ -220,5 +223,23 @@ mod tests {
             vec![channel1, channel2],
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_updating_missing_channel() {
+        let mut setting =
+            NotificationSetting::create(vec![build_channel(ChannelType::Email)]).expect("setting");
+        let mut destination = BTreeMap::new();
+        destination.insert("address".to_string(), "other@example.com".to_string());
+
+        let result = setting.update_channel_destination(
+            &crate::domain::notification::ChannelIdentifier::generate(),
+            ChannelDestination::new(ChannelType::Email, destination).expect("destination"),
+        );
+
+        assert!(matches!(
+            result,
+            Err(DomainError::NotificationChannelNotFound { .. })
+        ));
     }
 }

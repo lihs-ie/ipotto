@@ -5,6 +5,7 @@ use crate::errors::DomainError;
 
 /// Identifier for a lottery application aggregate.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct ApplicationIdentifier(String);
 
 impl ApplicationIdentifier {
@@ -26,5 +27,19 @@ impl ApplicationIdentifier {
     /// Returns the raw identifier value.
     pub fn value(&self) -> &str {
         &self.0
+    }
+}
+
+impl TryFrom<String> for ApplicationIdentifier {
+    type Error = DomainError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl From<ApplicationIdentifier> for String {
+    fn from(value: ApplicationIdentifier) -> Self {
+        value.0
     }
 }

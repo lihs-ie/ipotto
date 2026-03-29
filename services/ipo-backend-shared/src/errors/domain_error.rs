@@ -63,6 +63,9 @@ pub enum DomainError {
     #[error("duplicate notification channel type: {channel_type}")]
     DuplicateChannelType { channel_type: String },
 
+    #[error("notification channel not found: {channel_id}")]
+    NotificationChannelNotFound { channel_id: String },
+
     #[error("invalid channel destination for {channel_type}: {reason}")]
     InvalidChannelDestination {
         channel_type: String,

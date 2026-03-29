@@ -5,6 +5,7 @@ use crate::errors::DomainError;
 
 /// Identifier for an IPO stock aggregate.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct StockIdentifier(String);
 
 impl StockIdentifier {
@@ -26,6 +27,20 @@ impl StockIdentifier {
     /// Returns the raw identifier value.
     pub fn value(&self) -> &str {
         &self.0
+    }
+}
+
+impl TryFrom<String> for StockIdentifier {
+    type Error = DomainError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl From<StockIdentifier> for String {
+    fn from(value: StockIdentifier) -> Self {
+        value.0
     }
 }
 

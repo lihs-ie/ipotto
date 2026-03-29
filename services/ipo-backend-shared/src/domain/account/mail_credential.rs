@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::errors::DomainError;
@@ -5,7 +7,7 @@ use crate::errors::DomainError;
 use super::{ImapHost, ImapPort, MailAddress, MailPassword};
 
 /// Mail credential used to fetch image authentication keywords.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MailCredential {
     mail_address: MailAddress,
     mail_password: MailPassword,
@@ -51,5 +53,17 @@ impl MailCredential {
     /// Returns the IMAP port.
     pub fn imap_port(&self) -> ImapPort {
         self.imap_port
+    }
+}
+
+impl fmt::Debug for MailCredential {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MailCredential")
+            .field("mail_address", &"********")
+            .field("mail_password", &"********")
+            .field("imap_host", &self.imap_host)
+            .field("imap_port", &self.imap_port)
+            .finish()
     }
 }

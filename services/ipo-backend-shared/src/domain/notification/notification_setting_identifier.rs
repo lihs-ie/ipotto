@@ -5,6 +5,7 @@ use crate::errors::DomainError;
 
 /// Identifier for a notification setting aggregate.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct NotificationSettingIdentifier(String);
 
 impl NotificationSettingIdentifier {
@@ -34,6 +35,20 @@ impl NotificationSettingIdentifier {
     /// Returns the raw identifier value.
     pub fn value(&self) -> &str {
         &self.0
+    }
+}
+
+impl TryFrom<String> for NotificationSettingIdentifier {
+    type Error = DomainError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl From<NotificationSettingIdentifier> for String {
+    fn from(value: NotificationSettingIdentifier) -> Self {
+        value.0
     }
 }
 
