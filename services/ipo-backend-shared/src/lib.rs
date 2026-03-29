@@ -1,2 +1,4 @@
 pub mod domain;
-pub mod error;
+pub mod errors;
+pub mod events;
+pub mod services;
