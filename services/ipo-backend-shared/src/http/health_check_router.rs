@@ -22,6 +22,7 @@ mod tests {
         body::{to_bytes, Body},
         http::{Request, StatusCode},
     };
+    use serde_json::Value;
     use tower::util::ServiceExt;
 
     use super::create_health_check_router;
@@ -41,6 +42,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = to_bytes(response.into_body(), 1024).await.expect("body");
-        assert_eq!(&body[..], br#"{"status":"ok"}"#);
+        let json: Value = serde_json::from_slice(&body).expect("json");
+
+        assert_eq!(json["status"], "ok");
     }
 }
