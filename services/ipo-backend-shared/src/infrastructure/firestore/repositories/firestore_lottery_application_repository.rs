@@ -104,3 +104,62 @@ impl LotteryApplicationRepository for FirestoreLotteryApplicationRepository {
             }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone, Utc};
+
+    use super::FirestoreLotteryApplicationRepository;
+    use crate::domain::stock::{Shares, Yen};
+    use crate::domain::{
+        account::SecuritiesAccountIdentifier,
+        application::{ApplicationStatus, LotteryApplication, LotteryApplicationRepository},
+        stock::StockIdentifier,
+    };
+
+    fn build_application(
+        stock: StockIdentifier,
+        account: SecuritiesAccountIdentifier,
+        applied: bool,
+    ) -> LotteryApplication {
+        let mut application = LotteryApplication::create_with_values(
+            stock,
+            account,
+            Shares::new(100).expect("shares"),
+            Yen::new(1400).expect("price"),
+            Utc.with_ymd_and_hms(2026, 4, 5, 10, 0, 0)
+                .single()
+                .expect("ordered at"),
+        )
+        .expect("application");
+        if applied {
+            application.apply().expect("apply");
+        }
+        application
+    }
+
+    #[test]
+    fn filters_lottery_applications() {
+        let repository = FirestoreLotteryApplicationRepository::new();
+        let stock = StockIdentifier::generate();
+        let account = SecuritiesAccountIdentifier::generate();
+        let pending = build_application(stock.clone(), account.clone(), false);
+        let applied =
+            build_application(stock.clone(), SecuritiesAccountIdentifier::generate(), true);
+
+        repository.save(&pending).expect("save pending");
+        repository.save(&applied).expect("save applied");
+
+        assert_eq!(repository.find_by_stock(&stock).expect("by stock").len(), 2);
+        assert_eq!(
+            repository
+                .find_by_status(ApplicationStatus::Applied)
+                .expect("by status")
+                .len(),
+            1
+        );
+        assert!(repository
+            .exists_by_stock_and_account(&stock, &account)
+            .expect("exists"));
+    }
+}

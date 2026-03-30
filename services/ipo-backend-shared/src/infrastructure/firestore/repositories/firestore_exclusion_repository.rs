@@ -82,3 +82,36 @@ impl ExclusionRepository for FirestoreExclusionRepository {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone, Utc};
+
+    use super::FirestoreExclusionRepository;
+    use crate::domain::{
+        exclusion::{Exclusion, ExclusionReason, ExclusionRepository},
+        stock::CompanyName,
+    };
+
+    #[test]
+    fn saves_exists_and_deletes_exclusion() {
+        let repository = FirestoreExclusionRepository::new();
+        let company_name = CompanyName::new("テスト株式会社").expect("company");
+        let exclusion = Exclusion::create(
+            company_name.clone(),
+            ExclusionReason::new("見送り").expect("reason"),
+            Utc.with_ymd_and_hms(2026, 4, 1, 9, 0, 0)
+                .single()
+                .expect("registered at"),
+        )
+        .expect("exclusion");
+
+        repository.save(&exclusion).expect("save");
+        assert!(repository
+            .exists_by_company_name(&company_name)
+            .expect("exists"));
+
+        repository.delete(exclusion.identifier()).expect("delete");
+        assert_eq!(repository.find_all().expect("find all").len(), 0);
+    }
+}

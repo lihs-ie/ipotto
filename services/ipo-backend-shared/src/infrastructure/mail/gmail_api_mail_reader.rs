@@ -26,6 +26,7 @@ where
     client: Client,
     credential_store: S,
     account_identifier: SecuritiesAccountIdentifier,
+    api_base_url: String,
 }
 
 impl<S> core::fmt::Debug for GmailApiMailReader<S>
@@ -50,10 +51,26 @@ where
         credential_store: S,
         account_identifier: SecuritiesAccountIdentifier,
     ) -> Self {
+        Self::new_with_api_base_url(
+            client,
+            credential_store,
+            account_identifier,
+            "https://gmail.googleapis.com",
+        )
+    }
+
+    /// Creates a Gmail API mail reader with a custom API base URL.
+    pub fn new_with_api_base_url(
+        client: Client,
+        credential_store: S,
+        account_identifier: SecuritiesAccountIdentifier,
+        api_base_url: impl Into<String>,
+    ) -> Self {
         Self {
             client,
             credential_store,
             account_identifier,
+            api_base_url: api_base_url.into(),
         }
     }
 
@@ -106,7 +123,7 @@ where
     ) -> Result<String, DomainError> {
         let message_list = self
             .client
-            .get("https://gmail.googleapis.com/gmail/v1/users/me/messages")
+            .get(format!("{}/gmail/v1/users/me/messages", self.api_base_url))
             .bearer_auth(access_token)
             .query(&[("q", Self::build_search_query(received_after))])
             .send()
@@ -134,7 +151,8 @@ where
         let message = self
             .client
             .get(format!(
-                "https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
+                "{}/gmail/v1/users/me/messages/{message_id}",
+                self.api_base_url
             ))
             .bearer_auth(access_token)
             .query(&[("format", "full")])
@@ -265,5 +283,106 @@ impl GmailMessageBody {
             .map_err(|error| DomainError::MailParseError {
                 reason: error.to_string(),
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    use chrono::{TimeZone, Utc};
+    use serde_json::json;
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
+
+    use super::GmailApiMailReader;
+    use crate::{
+        acl::{mail::MailReaderPort, secrets::CredentialStorePort},
+        domain::account::{
+            ImapHost, ImapPort, MailAddress, MailCredential, MailPassword,
+            SecuritiesAccountIdentifier,
+        },
+        infrastructure::{
+            firestore::payloads::GmailOauthSecretPayload,
+            secrets::{gmail_oauth_secret_name, InMemoryCredentialStore},
+        },
+    };
+
+    fn build_mail_credential() -> MailCredential {
+        MailCredential::new(
+            MailAddress::new("test@example.com").expect("mail"),
+            MailPassword::new("mail-password").expect("mail password"),
+            ImapHost::new("imap.example.com").expect("host"),
+            ImapPort::new(993).expect("port"),
+        )
+        .expect("mail credential")
+    }
+
+    #[tokio::test]
+    async fn fetches_keywords_via_gmail_api_flow() {
+        let server = MockServer::start().await;
+        let account_identifier = SecuritiesAccountIdentifier::generate();
+        let store = InMemoryCredentialStore::new();
+        let payload = GmailOauthSecretPayload::new(
+            "client-id",
+            "client-secret",
+            "refresh-token",
+            format!("{}/oauth/token", server.uri()),
+        );
+        store
+            .save(
+                &gmail_oauth_secret_name(&account_identifier),
+                &serde_json::to_string(&payload).expect("payload"),
+            )
+            .expect("save oauth payload");
+
+        Mock::given(method("POST"))
+            .and(path("/oauth/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "access_token": "access-token"
+            })))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/gmail/v1/users/me/messages"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "messages": [{"id": "message-1"}]
+            })))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/gmail/v1/users/me/messages/message-1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "payload": {
+                    "body": {
+                        "data": URL_SAFE_NO_PAD.encode("みかん + りんご")
+                    }
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let reader = GmailApiMailReader::new_with_api_base_url(
+            reqwest::Client::new(),
+            store,
+            account_identifier,
+            server.uri(),
+        );
+        let keyword = reader
+            .fetch_image_authentication_keywords(
+                &build_mail_credential(),
+                Utc.with_ymd_and_hms(2026, 4, 1, 9, 0, 0)
+                    .single()
+                    .expect("received after"),
+                5,
+            )
+            .await
+            .expect("keyword");
+
+        assert_eq!(keyword.first_keyword(), "みかん");
+        assert_eq!(keyword.second_keyword(), "りんご");
     }
 }

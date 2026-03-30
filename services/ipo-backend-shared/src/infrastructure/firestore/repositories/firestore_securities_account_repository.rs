@@ -153,3 +153,76 @@ where
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone, Utc};
+
+    use super::FirestoreSecuritiesAccountRepository;
+    use crate::{
+        acl::secrets::CredentialStorePort,
+        domain::account::{
+            AccountCredential, ImapHost, ImapPort, LoginId, LoginPassword, MailAddress,
+            MailCredential, MailPassword, SecuritiesAccount, SecuritiesAccountRepository,
+            SecuritiesCompany, TradingPassword,
+        },
+        infrastructure::secrets::{account_credential_secret_name, InMemoryCredentialStore},
+    };
+
+    fn build_account(active: bool) -> SecuritiesAccount {
+        let mut account = SecuritiesAccount::create(
+            SecuritiesCompany::Rakuten,
+            AccountCredential::new(
+                LoginId::new("login").expect("login id"),
+                LoginPassword::new("password").expect("login password"),
+                TradingPassword::new("1234").expect("trading password"),
+                MailCredential::new(
+                    MailAddress::new("test@example.com").expect("mail"),
+                    MailPassword::new("mail-password").expect("mail password"),
+                    ImapHost::new("imap.example.com").expect("host"),
+                    ImapPort::new(993).expect("port"),
+                )
+                .expect("mail credential"),
+            )
+            .expect("credential"),
+        )
+        .expect("account");
+        if !active {
+            account.deactivate();
+        }
+        account.record_test_result(crate::domain::account::ConnectionTestResult::new(
+            true,
+            "ok",
+            Utc.with_ymd_and_hms(2026, 4, 1, 9, 0, 0)
+                .single()
+                .expect("tested at"),
+        ));
+        account
+    }
+
+    #[test]
+    fn saves_accounts_and_removes_secret_on_delete() {
+        let credential_store = InMemoryCredentialStore::new();
+        let repository = FirestoreSecuritiesAccountRepository::new(credential_store.clone());
+        let active = build_account(true);
+        let inactive = build_account(false);
+
+        repository.save(&active).expect("save active");
+        repository.save(&inactive).expect("save inactive");
+
+        assert_eq!(repository.find_all().expect("find all").len(), 2);
+        assert_eq!(repository.find_active().expect("find active").len(), 1);
+        assert!(credential_store
+            .exists(&account_credential_secret_name(active.identifier()))
+            .expect("secret exists"));
+
+        repository.delete(active.identifier()).expect("delete");
+        assert!(repository
+            .find_by_id(active.identifier())
+            .expect("find")
+            .is_none());
+        assert!(!credential_store
+            .exists(&account_credential_secret_name(active.identifier()))
+            .expect("secret removed"));
+    }
+}

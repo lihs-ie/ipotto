@@ -2,7 +2,11 @@ use async_trait::async_trait;
 
 use crate::{
     acl::scraping::ScrapedStock,
-    domain::account::{AccountCredential, ConnectionTestResult},
+    domain::{
+        account::{AccountCredential, ConnectionTestResult},
+        application::LotteryResult,
+        stock::IpoStock,
+    },
     errors::DomainError,
 };
 
@@ -17,4 +21,11 @@ pub trait BrokerBrowserPort: Send + Sync {
         &self,
         credential: &AccountCredential,
     ) -> Result<ConnectionTestResult, DomainError>;
+
+    /// Checks the lottery result for the given stock.
+    async fn check_lottery_result(
+        &self,
+        credential: &AccountCredential,
+        stock: &IpoStock,
+    ) -> Result<Option<LotteryResult>, DomainError>;
 }

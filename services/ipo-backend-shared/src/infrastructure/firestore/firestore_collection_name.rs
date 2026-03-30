@@ -22,3 +22,30 @@ impl FirestoreCollectionName {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::FirestoreCollectionName;
+
+    #[test]
+    fn returns_expected_collection_names() {
+        assert_eq!(FirestoreCollectionName::IpoStocks.as_str(), "ipo_stocks");
+        assert_eq!(FirestoreCollectionName::Exclusions.as_str(), "exclusions");
+        assert_eq!(
+            FirestoreCollectionName::LotteryApplications.as_str(),
+            "lottery_applications"
+        );
+        assert_eq!(
+            FirestoreCollectionName::SecuritiesAccounts.as_str(),
+            "securities_accounts"
+        );
+        assert_eq!(
+            FirestoreCollectionName::NotificationSettings.as_str(),
+            "notification_settings"
+        );
+        assert_eq!(
+            FirestoreCollectionName::OperationLogs.as_str(),
+            "operation_logs"
+        );
+    }
+}

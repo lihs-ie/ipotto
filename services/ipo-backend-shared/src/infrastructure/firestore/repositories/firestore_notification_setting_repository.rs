@@ -85,3 +85,60 @@ impl NotificationSettingRepository for FirestoreNotificationSettingRepository {
             })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::FirestoreNotificationSettingRepository;
+    use crate::domain::notification::{
+        ChannelDestination, ChannelType, NotificationChannel, NotificationEventType,
+        NotificationSetting, NotificationSettingRepository,
+    };
+
+    fn build_channel(channel_type: ChannelType) -> NotificationChannel {
+        let mut destination = BTreeMap::new();
+        match channel_type {
+            ChannelType::Line => {
+                destination.insert("token".to_string(), "line-token".to_string());
+            }
+            ChannelType::Email => {
+                destination.insert("address".to_string(), "notify@example.com".to_string());
+            }
+            ChannelType::Slack => {
+                destination.insert("webhookUrl".to_string(), "https://example.com".to_string());
+            }
+        }
+        let mut subscriptions = BTreeMap::new();
+        subscriptions.insert(NotificationEventType::ApplicationCompleted, true);
+        NotificationChannel::create(
+            channel_type,
+            ChannelDestination::new(channel_type, destination).expect("destination"),
+            true,
+            subscriptions,
+        )
+        .expect("channel")
+    }
+
+    #[test]
+    fn saves_default_setting_and_replaces_channels() {
+        let repository = FirestoreNotificationSettingRepository::new();
+        let mut initial =
+            NotificationSetting::create(vec![build_channel(ChannelType::Email)]).expect("setting");
+        initial.enable().expect("enable");
+        repository.save(&initial).expect("save initial");
+
+        let found = repository.find_default().expect("find default");
+        assert_eq!(found.channels().len(), 1);
+        assert_eq!(found.channels()[0].channel_type(), ChannelType::Email);
+
+        let mut replaced =
+            NotificationSetting::create(vec![build_channel(ChannelType::Slack)]).expect("setting");
+        replaced.enable().expect("enable");
+        repository.save(&replaced).expect("save replaced");
+
+        let found = repository.find_default().expect("find replaced");
+        assert_eq!(found.channels().len(), 1);
+        assert_eq!(found.channels()[0].channel_type(), ChannelType::Slack);
+    }
+}

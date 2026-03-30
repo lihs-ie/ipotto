@@ -71,3 +71,75 @@ impl OperationLogRepository for FirestoreOperationLogRepository {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone, Utc};
+
+    use super::FirestoreOperationLogRepository;
+    use crate::domain::operation_log::{
+        OperationEventType, OperationLog, OperationLogPayload, OperationLogRepository,
+        OperationStatus,
+    };
+
+    fn build_log(
+        event_type: OperationEventType,
+        status: OperationStatus,
+        executed_at: chrono::DateTime<Utc>,
+    ) -> OperationLog {
+        OperationLog::create(OperationLogPayload::new(
+            None,
+            event_type,
+            "ipo-service",
+            status,
+            "executed",
+            None,
+            executed_at,
+        ))
+        .expect("log")
+    }
+
+    #[test]
+    fn filters_operation_logs() {
+        let repository = FirestoreOperationLogRepository::new();
+        let first = build_log(
+            OperationEventType::FetchStocks,
+            OperationStatus::Succeeded,
+            Utc.with_ymd_and_hms(2026, 4, 1, 9, 0, 0)
+                .single()
+                .expect("first"),
+        );
+        let second = build_log(
+            OperationEventType::ConnectionTest,
+            OperationStatus::Failed,
+            Utc.with_ymd_and_hms(2026, 4, 3, 9, 0, 0)
+                .single()
+                .expect("second"),
+        );
+
+        repository.save(&first).expect("save first");
+        repository.save(&second).expect("save second");
+
+        assert_eq!(
+            repository
+                .find_by_event_type(OperationEventType::ConnectionTest)
+                .expect("by event")
+                .len(),
+            1
+        );
+        assert_eq!(
+            repository
+                .find_by_date_range(
+                    Utc.with_ymd_and_hms(2026, 4, 2, 0, 0, 0)
+                        .single()
+                        .expect("start"),
+                    Utc.with_ymd_and_hms(2026, 4, 4, 0, 0, 0)
+                        .single()
+                        .expect("end"),
+                )
+                .expect("by range")
+                .len(),
+            1
+        );
+    }
+}

@@ -58,3 +58,59 @@ impl NotificationPort for SlackNotificationAdapter {
         destination.validate_for(ChannelType::Slack)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use wiremock::{
+        matchers::{body_string_contains, method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
+
+    use super::SlackNotificationAdapter;
+    use crate::{
+        acl::notification::{NotificationEvent, NotificationPort},
+        domain::{
+            account::SecuritiesAccountIdentifier,
+            application::ApplicationIdentifier,
+            notification::{ChannelDestination, ChannelType},
+            stock::{Shares, StockIdentifier, Yen},
+        },
+        events::ApplicationCompleted,
+    };
+
+    fn build_event() -> NotificationEvent {
+        NotificationEvent::ApplicationCompleted(ApplicationCompleted {
+            identifier: ApplicationIdentifier::generate(),
+            stock: StockIdentifier::generate(),
+            securities_account: SecuritiesAccountIdentifier::generate(),
+            applied_shares: Shares::new(100).expect("shares"),
+            applied_price: Yen::new(1400).expect("price"),
+            applied_at: chrono::Utc::now(),
+        })
+    }
+
+    #[tokio::test]
+    async fn sends_slack_notification_request() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/slack"))
+            .and(body_string_contains("\"text\""))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+
+        let mut destination = BTreeMap::new();
+        destination.insert("webhookUrl".to_string(), format!("{}/slack", server.uri()));
+        let adapter = SlackNotificationAdapter::new(reqwest::Client::new());
+
+        adapter
+            .send(
+                &build_event(),
+                &ChannelDestination::new(ChannelType::Slack, destination).expect("destination"),
+            )
+            .await
+            .expect("send");
+    }
+}
