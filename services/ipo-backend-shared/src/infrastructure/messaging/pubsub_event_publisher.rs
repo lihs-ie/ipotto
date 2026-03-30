@@ -1,7 +1,8 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde_json::Value;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::{acl::messaging::EventPublisherPort, errors::DomainError};
@@ -25,13 +26,8 @@ impl PubSubEventPublisher {
     }
 
     /// Returns the published message bodies.
-    pub fn published_messages(&self) -> Result<Vec<String>, DomainError> {
-        self.published_messages
-            .lock()
-            .map_err(|error| DomainError::PubSubPublishError {
-                reason: error.to_string(),
-            })
-            .map(|messages| messages.clone())
+    pub async fn published_messages(&self) -> Result<Vec<String>, DomainError> {
+        Ok(self.published_messages.lock().await.clone())
     }
 }
 
@@ -56,12 +52,7 @@ impl EventPublisherPort for PubSubEventPublisher {
             serde_json::to_string(&envelope).map_err(|error| DomainError::PubSubPublishError {
                 reason: error.to_string(),
             })?;
-        self.published_messages
-            .lock()
-            .map_err(|error| DomainError::PubSubPublishError {
-                reason: error.to_string(),
-            })?
-            .push(body);
+        self.published_messages.lock().await.push(body);
         Ok(())
     }
 }
