@@ -140,10 +140,11 @@ node-ci: node-lint node-typecheck node-test ## Node.js CI相当（直接実行�
 # CI（actrun経由 — 設定はactrun.tomlで管理）
 # ============================================================
 
-.PHONY: ci ci-rust ci-node ci-e2e ci-e2e-browser ci-e2e-frontend ci-dry-run ci-lint
+.PHONY: ci ci-rust ci-node ci-integration ci-e2e ci-e2e-browser ci-e2e-frontend ci-dry-run ci-lint
 
-ci: ## CI全チェック一括実行（actrun: ci.yml + e2e.yml）
+ci: ## CI全チェック一括実行（actrun: ci.yml + ci-integration.yml + e2e.yml）
 	actrun workflow run .github/workflows/ci.yml
+	actrun workflow run .github/workflows/ci-integration.yml
 	actrun workflow run .github/workflows/e2e.yml
 
 ci-rust: ## Rust CIジョブのみ実行（actrun）
@@ -151,6 +152,9 @@ ci-rust: ## Rust CIジョブのみ実行（actrun）
 
 ci-node: ## Node.js CIジョブのみ実行（actrun）
 	actrun workflow run .github/workflows/ci.yml --job node-lint-test
+
+ci-integration: ## Integration CI実行（actrun: ci-integration.yml）
+	actrun workflow run .github/workflows/ci-integration.yml
 
 ci-e2e: ## E2E全ジョブ実行（actrun: e2e.yml）
 	actrun workflow run .github/workflows/e2e.yml
@@ -165,7 +169,7 @@ ci-dry-run: ## CI dry-run（実行計画のみ表示）
 	actrun workflow run .github/workflows/ci.yml --dry-run
 
 ci-lint: ## 全ワークフローのlint
-	actrun lint .github/workflows/ci.yml .github/workflows/e2e.yml
+	actrun lint .github/workflows/ci.yml .github/workflows/ci-integration.yml .github/workflows/e2e.yml
 
 # ============================================================
 # Help

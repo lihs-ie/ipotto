@@ -10,6 +10,9 @@ services:
       - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
       - FIREBASE_AUTH_EMULATOR_HOST=firebase-emulator:9099
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - IPO_BROWSER_BASE_URL=http://ipo-browser:8081
+      - IPO_NOTIFICATION_FROM_ADDRESS=no-reply@example.com
+      - SENDGRID_API_KEY=test-sendgrid-key
       - ALLOWED_EMAIL=test@example.com
       - RUST_LOG=info
     depends_on:
@@ -52,6 +55,8 @@ services:
       - PORT=8082
       - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - IPO_BROWSER_BASE_URL=http://ipo-browser:8081
+      - IPO_EXTERNAL_SCRAPER_BASE_URL=http://html-mock-server/ipo-stocks.json
       - RUST_LOG=info
     depends_on:
       firebase-emulator:
@@ -70,6 +75,7 @@ services:
       - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
       - IPO_BROWSER_URL=http://ipo-browser:8081
+      - IPO_BROWSER_BASE_URL=http://ipo-browser:8081
       - RUST_LOG=info
     depends_on:
       firebase-emulator:
