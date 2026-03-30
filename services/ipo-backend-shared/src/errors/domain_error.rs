@@ -71,4 +71,46 @@ pub enum DomainError {
         channel_type: String,
         reason: String,
     },
+
+    #[error("firestore mapping error: {reason}")]
+    FirestoreMappingError { reason: String },
+
+    #[error("secret payload error: {reason}")]
+    SecretPayloadError { reason: String },
+
+    #[error("http client error: {reason}")]
+    HttpClientError { reason: String },
+
+    #[error("pubsub publish error: {reason}")]
+    PubSubPublishError { reason: String },
+
+    #[error("notification send error for {channel_type}: {reason}")]
+    NotificationSendError {
+        channel_type: String,
+        reason: String,
+    },
+
+    #[error("mail retrieval timed out")]
+    MailRetrievalTimeout,
+
+    #[error("mail parse error: {reason}")]
+    MailParseError { reason: String },
+
+    #[error("gmail api error: {reason}")]
+    GmailApiError { reason: String },
+
+    #[error("imap error: {reason}")]
+    ImapError { reason: String },
+
+    #[error("scraping error from {scraper_source}: {reason}")]
+    ScrapingError {
+        scraper_source: String,
+        reason: String,
+    },
+
+    #[error("operation log validation error: {reason}")]
+    OperationLogValidationError { reason: String },
+
+    #[error("session storage error: {reason}")]
+    SessionStorageError { reason: String },
 }
