@@ -74,7 +74,10 @@ mod tests {
     };
     use chrono::{NaiveDate, TimeZone, Utc};
     use ipo_backend_shared::{
-        acl::{browser::BrokerBrowserPort, notification::NotificationPort, scraping::ScrapedStock},
+        acl::{
+            browser::BrokerBrowserPort, messaging::EventPublisherPort,
+            notification::NotificationPort, scraping::ScrapedStock, secrets::CredentialStorePort,
+        },
         domain::{
             account::{
                 AccountCredential, ConnectionTestResult, ImapHost, ImapPort, LoginId,
@@ -97,20 +100,30 @@ mod tests {
             },
         },
         errors::DomainError,
-        events::ApplicationCompleted,
+        events::{ApplicationCompleted, IpoInfoUpdated, LotteryResultConfirmed},
+        infrastructure::messaging::PubSubEventEnvelope,
+        infrastructure::{
+            notification::EmailNotificationAdapter, secrets::sendgrid_api_key_secret_name,
+        },
         testing::{
             FirestoreExclusionRepository, FirestoreIpoStockRepository,
             FirestoreLotteryApplicationRepository, FirestoreNotificationSettingRepository,
             FirestoreOperationLogRepository, FirestoreSecuritiesAccountRepository,
-            InMemoryCredentialStore,
+            InMemoryCredentialStore, PubSubEventPublisher,
         },
     };
     use serde_json::{json, Value};
     use tokio::sync::Mutex;
     use tower::util::ServiceExt;
+    use wiremock::{
+        matchers::{body_partial_json, method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
 
     use super::create_router;
-    use crate::infrastructure::{DependencyContainer, NotificationPortRegistry};
+    use crate::infrastructure::{
+        BrowserServiceClient, DependencyContainer, NotificationPortRegistry,
+    };
 
     #[derive(Debug)]
     struct DummyBrowserPort;
@@ -368,6 +381,653 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dispatches_generic_notification_via_http_with_emulated_email_service() {
+        let sendgrid_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/mail/send"))
+            .and(wiremock::matchers::header(
+                "authorization",
+                "Bearer sendgrid-token",
+            ))
+            .and(body_partial_json(json!({
+                "from": {"email": "no-reply@example.com"},
+                "personalizations": [{"to": [{"email": "notify@example.com"}]}],
+            })))
+            .respond_with(ResponseTemplate::new(202))
+            .mount(&sendgrid_server)
+            .await;
+
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+            as Arc<dyn IpoStockRepository + Send + Sync>;
+        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+            as Arc<dyn ExclusionRepository + Send + Sync>;
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+            as Arc<dyn LotteryApplicationRepository + Send + Sync>;
+        let credential_store = InMemoryCredentialStore::new();
+        credential_store
+            .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .expect("save api key");
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+            credential_store.clone(),
+        )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
+        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
+            as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+            as Arc<dyn OperationLogRepository + Send + Sync>;
+
+        let mut subscriptions = BTreeMap::new();
+        subscriptions.insert(NotificationEventType::ApplicationCompleted, true);
+        let mut destination_values = BTreeMap::new();
+        destination_values.insert("address".to_string(), "notify@example.com".to_string());
+        let channel = NotificationChannel::create(
+            ChannelType::Email,
+            ChannelDestination::new(ChannelType::Email, destination_values).expect("destination"),
+            true,
+            subscriptions,
+        )
+        .expect("channel");
+        let mut setting = NotificationSetting::create(vec![channel]).expect("setting");
+        setting.enable().expect("enable");
+        notification_setting_repository
+            .save(&setting)
+            .expect("save setting");
+
+        let app = create_router(
+            DependencyContainer::from_components(
+                stock_repository,
+                exclusion_repository,
+                application_repository,
+                account_repository,
+                notification_setting_repository,
+                operation_log_repository,
+                Arc::new(DummyBrowserPort),
+                Arc::new(NotificationPortRegistry::new(
+                    Arc::new(CaptureNotificationPort::default()),
+                    Arc::new(EmailNotificationAdapter::new_with_endpoint(
+                        reqwest::Client::new(),
+                        credential_store,
+                        "no-reply@example.com",
+                        format!("{}/mail/send", sendgrid_server.uri()),
+                    )),
+                    Arc::new(CaptureNotificationPort::default()),
+                )),
+            )
+            .expect("container"),
+        );
+
+        let event = ApplicationCompleted {
+            identifier: ApplicationIdentifier::generate(),
+            stock: StockIdentifier::generate(),
+            securities_account:
+                ipo_backend_shared::domain::account::SecuritiesAccountIdentifier::generate(),
+            applied_shares: Shares::new(100).expect("shares"),
+            applied_price: Yen::new(1400).expect("price"),
+            applied_at: Utc
+                .with_ymd_and_hms(2026, 4, 5, 10, 0, 0)
+                .single()
+                .expect("applied at"),
+        };
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/internal/pubsub/ipo-notification")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "eventType": "ApplicationCompleted",
+                            "payload": serde_json::to_value(event).expect("event json"),
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn returns_service_unavailable_when_notification_delivery_fails() {
+        let sendgrid_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/mail/send"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&sendgrid_server)
+            .await;
+
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+            as Arc<dyn IpoStockRepository + Send + Sync>;
+        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+            as Arc<dyn ExclusionRepository + Send + Sync>;
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+            as Arc<dyn LotteryApplicationRepository + Send + Sync>;
+        let credential_store = InMemoryCredentialStore::new();
+        credential_store
+            .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .expect("save api key");
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+            credential_store.clone(),
+        )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
+        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
+            as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+            as Arc<dyn OperationLogRepository + Send + Sync>;
+
+        let mut subscriptions = BTreeMap::new();
+        subscriptions.insert(NotificationEventType::ApplicationCompleted, true);
+        let mut destination_values = BTreeMap::new();
+        destination_values.insert("address".to_string(), "notify@example.com".to_string());
+        let channel = NotificationChannel::create(
+            ChannelType::Email,
+            ChannelDestination::new(ChannelType::Email, destination_values).expect("destination"),
+            true,
+            subscriptions,
+        )
+        .expect("channel");
+        let mut setting = NotificationSetting::create(vec![channel]).expect("setting");
+        setting.enable().expect("enable");
+        notification_setting_repository
+            .save(&setting)
+            .expect("save setting");
+
+        let app = create_router(
+            DependencyContainer::from_components(
+                stock_repository,
+                exclusion_repository,
+                application_repository,
+                account_repository,
+                notification_setting_repository,
+                operation_log_repository,
+                Arc::new(DummyBrowserPort),
+                Arc::new(NotificationPortRegistry::new(
+                    Arc::new(CaptureNotificationPort::default()),
+                    Arc::new(EmailNotificationAdapter::new_with_endpoint(
+                        reqwest::Client::new(),
+                        credential_store,
+                        "no-reply@example.com",
+                        format!("{}/mail/send", sendgrid_server.uri()),
+                    )),
+                    Arc::new(CaptureNotificationPort::default()),
+                )),
+            )
+            .expect("container"),
+        );
+
+        let event = ApplicationCompleted {
+            identifier: ApplicationIdentifier::generate(),
+            stock: StockIdentifier::generate(),
+            securities_account:
+                ipo_backend_shared::domain::account::SecuritiesAccountIdentifier::generate(),
+            applied_shares: Shares::new(100).expect("shares"),
+            applied_price: Yen::new(1400).expect("price"),
+            applied_at: Utc
+                .with_ymd_and_hms(2026, 4, 5, 10, 0, 0)
+                .single()
+                .expect("applied at"),
+        };
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/internal/pubsub/ipo-notification")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "eventType": "ApplicationCompleted",
+                            "payload": serde_json::to_value(event).expect("event json"),
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .expect("body");
+        let json: Value = serde_json::from_slice(&body).expect("json");
+        assert_eq!(json["error"]["code"], "SERVICE_UNAVAILABLE");
+        assert_eq!(
+            json["error"]["message"],
+            "外部サービスとの通信に失敗しました"
+        );
+    }
+
+    #[tokio::test]
+    async fn dispatches_ipo_info_updated_via_http_with_emulated_email_service() {
+        let sendgrid_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/mail/send"))
+            .and(wiremock::matchers::header(
+                "authorization",
+                "Bearer sendgrid-token",
+            ))
+            .and(body_partial_json(json!({
+                "from": {"email": "no-reply@example.com"},
+                "personalizations": [{"to": [{"email": "notify@example.com"}]}],
+            })))
+            .respond_with(ResponseTemplate::new(202))
+            .mount(&sendgrid_server)
+            .await;
+
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+            as Arc<dyn IpoStockRepository + Send + Sync>;
+        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+            as Arc<dyn ExclusionRepository + Send + Sync>;
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+            as Arc<dyn LotteryApplicationRepository + Send + Sync>;
+        let credential_store = InMemoryCredentialStore::new();
+        credential_store
+            .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .expect("save api key");
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+            credential_store.clone(),
+        )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
+        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
+            as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+            as Arc<dyn OperationLogRepository + Send + Sync>;
+
+        let mut subscriptions = BTreeMap::new();
+        subscriptions.insert(NotificationEventType::StockUpdated, true);
+        let mut destination_values = BTreeMap::new();
+        destination_values.insert("address".to_string(), "notify@example.com".to_string());
+        let channel = NotificationChannel::create(
+            ChannelType::Email,
+            ChannelDestination::new(ChannelType::Email, destination_values).expect("destination"),
+            true,
+            subscriptions,
+        )
+        .expect("channel");
+        let mut setting = NotificationSetting::create(vec![channel]).expect("setting");
+        setting.enable().expect("enable");
+        notification_setting_repository
+            .save(&setting)
+            .expect("save setting");
+
+        let app = create_router(
+            DependencyContainer::from_components(
+                stock_repository,
+                exclusion_repository,
+                application_repository,
+                account_repository,
+                notification_setting_repository,
+                operation_log_repository,
+                Arc::new(DummyBrowserPort),
+                Arc::new(NotificationPortRegistry::new(
+                    Arc::new(CaptureNotificationPort::default()),
+                    Arc::new(EmailNotificationAdapter::new_with_endpoint(
+                        reqwest::Client::new(),
+                        credential_store,
+                        "no-reply@example.com",
+                        format!("{}/mail/send", sendgrid_server.uri()),
+                    )),
+                    Arc::new(CaptureNotificationPort::default()),
+                )),
+            )
+            .expect("container"),
+        );
+
+        let stock = build_stock();
+        let event = IpoInfoUpdated {
+            identifier: stock.identifier().clone(),
+            company_name: stock.company_profile().company_name().clone(),
+            book_building_period: stock.schedule().book_building_period().clone(),
+            lottery_date: stock.schedule().lottery_date(),
+            listing_date: stock.schedule().listing_date(),
+            updated_at: Utc::now(),
+        };
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/internal/pubsub/ipo-info-updated")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&event).expect("event body")))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn dispatches_lottery_result_updated_via_http_with_emulated_email_service() {
+        let sendgrid_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/mail/send"))
+            .and(wiremock::matchers::header(
+                "authorization",
+                "Bearer sendgrid-token",
+            ))
+            .and(body_partial_json(json!({
+                "from": {"email": "no-reply@example.com"},
+                "personalizations": [{"to": [{"email": "notify@example.com"}]}],
+            })))
+            .respond_with(ResponseTemplate::new(202))
+            .mount(&sendgrid_server)
+            .await;
+
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+            as Arc<dyn IpoStockRepository + Send + Sync>;
+        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+            as Arc<dyn ExclusionRepository + Send + Sync>;
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+            as Arc<dyn LotteryApplicationRepository + Send + Sync>;
+        let credential_store = InMemoryCredentialStore::new();
+        credential_store
+            .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .expect("save api key");
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+            credential_store.clone(),
+        )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
+        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
+            as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+            as Arc<dyn OperationLogRepository + Send + Sync>;
+
+        let mut subscriptions = BTreeMap::new();
+        subscriptions.insert(NotificationEventType::LotteryResultWon, true);
+        let mut destination_values = BTreeMap::new();
+        destination_values.insert("address".to_string(), "notify@example.com".to_string());
+        let channel = NotificationChannel::create(
+            ChannelType::Email,
+            ChannelDestination::new(ChannelType::Email, destination_values).expect("destination"),
+            true,
+            subscriptions,
+        )
+        .expect("channel");
+        let mut setting = NotificationSetting::create(vec![channel]).expect("setting");
+        setting.enable().expect("enable");
+        notification_setting_repository
+            .save(&setting)
+            .expect("save setting");
+
+        let app = create_router(
+            DependencyContainer::from_components(
+                stock_repository,
+                exclusion_repository,
+                application_repository,
+                account_repository,
+                notification_setting_repository,
+                operation_log_repository,
+                Arc::new(DummyBrowserPort),
+                Arc::new(NotificationPortRegistry::new(
+                    Arc::new(CaptureNotificationPort::default()),
+                    Arc::new(EmailNotificationAdapter::new_with_endpoint(
+                        reqwest::Client::new(),
+                        credential_store,
+                        "no-reply@example.com",
+                        format!("{}/mail/send", sendgrid_server.uri()),
+                    )),
+                    Arc::new(CaptureNotificationPort::default()),
+                )),
+            )
+            .expect("container"),
+        );
+
+        let event = LotteryResultConfirmed {
+            identifier: ApplicationIdentifier::generate(),
+            stock: StockIdentifier::generate(),
+            lottery_result: ipo_backend_shared::domain::application::LotteryResult::Won,
+            confirmed_at: Utc::now(),
+        };
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/internal/pubsub/ipo-result-updated")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&event).expect("event body")))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn dispatches_ipo_info_updated_from_published_envelope_via_http() {
+        let sendgrid_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/mail/send"))
+            .and(wiremock::matchers::header(
+                "authorization",
+                "Bearer sendgrid-token",
+            ))
+            .and(body_partial_json(json!({
+                "from": {"email": "no-reply@example.com"},
+                "personalizations": [{"to": [{"email": "notify@example.com"}]}],
+            })))
+            .respond_with(ResponseTemplate::new(202))
+            .mount(&sendgrid_server)
+            .await;
+
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+            as Arc<dyn IpoStockRepository + Send + Sync>;
+        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+            as Arc<dyn ExclusionRepository + Send + Sync>;
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+            as Arc<dyn LotteryApplicationRepository + Send + Sync>;
+        let credential_store = InMemoryCredentialStore::new();
+        credential_store
+            .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .expect("save api key");
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+            credential_store.clone(),
+        )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
+        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
+            as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+            as Arc<dyn OperationLogRepository + Send + Sync>;
+
+        let mut subscriptions = BTreeMap::new();
+        subscriptions.insert(NotificationEventType::StockUpdated, true);
+        let mut destination_values = BTreeMap::new();
+        destination_values.insert("address".to_string(), "notify@example.com".to_string());
+        let channel = NotificationChannel::create(
+            ChannelType::Email,
+            ChannelDestination::new(ChannelType::Email, destination_values).expect("destination"),
+            true,
+            subscriptions,
+        )
+        .expect("channel");
+        let mut setting = NotificationSetting::create(vec![channel]).expect("setting");
+        setting.enable().expect("enable");
+        notification_setting_repository
+            .save(&setting)
+            .expect("save setting");
+
+        let app = create_router(
+            DependencyContainer::from_components(
+                stock_repository,
+                exclusion_repository,
+                application_repository,
+                account_repository,
+                notification_setting_repository,
+                operation_log_repository,
+                Arc::new(DummyBrowserPort),
+                Arc::new(NotificationPortRegistry::new(
+                    Arc::new(CaptureNotificationPort::default()),
+                    Arc::new(EmailNotificationAdapter::new_with_endpoint(
+                        reqwest::Client::new(),
+                        credential_store,
+                        "no-reply@example.com",
+                        format!("{}/mail/send", sendgrid_server.uri()),
+                    )),
+                    Arc::new(CaptureNotificationPort::default()),
+                )),
+            )
+            .expect("container"),
+        );
+
+        let stock = build_stock();
+        let event = IpoInfoUpdated {
+            identifier: stock.identifier().clone(),
+            company_name: stock.company_profile().company_name().clone(),
+            book_building_period: stock.schedule().book_building_period().clone(),
+            lottery_date: stock.schedule().lottery_date(),
+            listing_date: stock.schedule().listing_date(),
+            updated_at: Utc::now(),
+        };
+        let publisher = PubSubEventPublisher::new("ipo-info-fetcher");
+        publisher
+            .publish(
+                "ipo-info-updated",
+                stock.identifier().value(),
+                "IpoStock",
+                serde_json::to_value(&event).expect("event json"),
+                None,
+            )
+            .await
+            .expect("publish");
+        let messages = publisher.published_messages().await.expect("messages");
+        let envelope: PubSubEventEnvelope<Value> =
+            serde_json::from_str(&messages[0]).expect("envelope");
+        assert_eq!(envelope.metadata.service_name, "ipo-info-fetcher");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/internal/pubsub/ipo-info-updated")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&envelope.payload).expect("payload body"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn dispatches_lottery_result_updated_from_published_envelope_via_http() {
+        let sendgrid_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/mail/send"))
+            .and(wiremock::matchers::header(
+                "authorization",
+                "Bearer sendgrid-token",
+            ))
+            .and(body_partial_json(json!({
+                "from": {"email": "no-reply@example.com"},
+                "personalizations": [{"to": [{"email": "notify@example.com"}]}],
+            })))
+            .respond_with(ResponseTemplate::new(202))
+            .mount(&sendgrid_server)
+            .await;
+
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+            as Arc<dyn IpoStockRepository + Send + Sync>;
+        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+            as Arc<dyn ExclusionRepository + Send + Sync>;
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+            as Arc<dyn LotteryApplicationRepository + Send + Sync>;
+        let credential_store = InMemoryCredentialStore::new();
+        credential_store
+            .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .expect("save api key");
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+            credential_store.clone(),
+        )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
+        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
+            as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+            as Arc<dyn OperationLogRepository + Send + Sync>;
+
+        let mut subscriptions = BTreeMap::new();
+        subscriptions.insert(NotificationEventType::LotteryResultWon, true);
+        let mut destination_values = BTreeMap::new();
+        destination_values.insert("address".to_string(), "notify@example.com".to_string());
+        let channel = NotificationChannel::create(
+            ChannelType::Email,
+            ChannelDestination::new(ChannelType::Email, destination_values).expect("destination"),
+            true,
+            subscriptions,
+        )
+        .expect("channel");
+        let mut setting = NotificationSetting::create(vec![channel]).expect("setting");
+        setting.enable().expect("enable");
+        notification_setting_repository
+            .save(&setting)
+            .expect("save setting");
+
+        let app = create_router(
+            DependencyContainer::from_components(
+                stock_repository,
+                exclusion_repository,
+                application_repository,
+                account_repository,
+                notification_setting_repository,
+                operation_log_repository,
+                Arc::new(DummyBrowserPort),
+                Arc::new(NotificationPortRegistry::new(
+                    Arc::new(CaptureNotificationPort::default()),
+                    Arc::new(EmailNotificationAdapter::new_with_endpoint(
+                        reqwest::Client::new(),
+                        credential_store,
+                        "no-reply@example.com",
+                        format!("{}/mail/send", sendgrid_server.uri()),
+                    )),
+                    Arc::new(CaptureNotificationPort::default()),
+                )),
+            )
+            .expect("container"),
+        );
+
+        let event = LotteryResultConfirmed {
+            identifier: ApplicationIdentifier::generate(),
+            stock: StockIdentifier::generate(),
+            lottery_result: ipo_backend_shared::domain::application::LotteryResult::Won,
+            confirmed_at: Utc::now(),
+        };
+        let publisher = PubSubEventPublisher::new("ipo-result-checker");
+        publisher
+            .publish(
+                "ipo-result-updated",
+                event.identifier.value(),
+                "LotteryApplication",
+                serde_json::to_value(&event).expect("event json"),
+                None,
+            )
+            .await
+            .expect("publish");
+        let messages = publisher.published_messages().await.expect("messages");
+        let envelope: PubSubEventEnvelope<Value> =
+            serde_json::from_str(&messages[0]).expect("envelope");
+        assert_eq!(envelope.metadata.service_name, "ipo-result-checker");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/internal/pubsub/ipo-result-updated")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&envelope.payload).expect("payload body"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
     async fn tests_account_connection_via_http() {
         let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
             as Arc<dyn IpoStockRepository + Send + Sync>;
@@ -429,5 +1089,91 @@ mod tests {
             .expect("find account")
             .expect("stored account");
         assert!(stored.connection_test().is_some());
+    }
+
+    #[tokio::test]
+    async fn tests_account_connection_via_http_with_emulated_browser_service() {
+        let browser_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/internal/accounts/test"))
+            .and(body_partial_json(json!({
+                "loginId": "login",
+                "loginPassword": "password",
+                "tradingPassword": "1234",
+                "mailAddress": "test@example.com",
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "success": true,
+                "message": "connected"
+            })))
+            .mount(&browser_server)
+            .await;
+
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+            as Arc<dyn IpoStockRepository + Send + Sync>;
+        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+            as Arc<dyn ExclusionRepository + Send + Sync>;
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+            as Arc<dyn LotteryApplicationRepository + Send + Sync>;
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+            InMemoryCredentialStore::new(),
+        )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
+        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
+            as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+            as Arc<dyn OperationLogRepository + Send + Sync>;
+
+        let account = build_account();
+        let account_id = account.identifier().value().to_string();
+        account_repository.save(&account).expect("save account");
+
+        let app = create_router(
+            DependencyContainer::from_components(
+                stock_repository,
+                exclusion_repository,
+                application_repository,
+                account_repository.clone(),
+                notification_setting_repository,
+                operation_log_repository,
+                Arc::new(BrowserServiceClient::new(
+                    reqwest::Client::new(),
+                    browser_server.uri(),
+                )),
+                Arc::new(NotificationPortRegistry::new(
+                    Arc::new(CaptureNotificationPort::default()),
+                    Arc::new(CaptureNotificationPort::default()),
+                    Arc::new(CaptureNotificationPort::default()),
+                )),
+            )
+            .expect("container"),
+        );
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/v1/accounts/{account_id}/test"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .expect("body");
+        let json: Value = serde_json::from_slice(&body).expect("json");
+        assert_eq!(json["success"], true);
+        assert_eq!(json["message"], "connected");
+
+        let stored = account_repository
+            .find_by_id(&SecuritiesAccountIdentifier::new(account_id).expect("account identifier"))
+            .expect("find account")
+            .expect("stored account");
+        assert_eq!(
+            stored.connection_test().expect("connection test").message(),
+            "connected"
+        );
     }
 }

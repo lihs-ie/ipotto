@@ -50,9 +50,13 @@ mod tests {
     };
     use serde_json::Value;
     use tower::util::ServiceExt;
+    use wiremock::{
+        matchers::{body_partial_json, method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
 
     use super::create_router;
-    use crate::infrastructure::DependencyContainer;
+    use crate::infrastructure::{BrowserServiceClient, DependencyContainer};
 
     #[derive(Debug)]
     struct WinningBrowser;
@@ -205,6 +209,183 @@ mod tests {
                 .expect("messages")
                 .len(),
             1
+        );
+    }
+
+    #[tokio::test]
+    async fn handles_pubsub_check_request_with_emulated_browser_service() {
+        let browser_server = MockServer::start().await;
+        let credential_store = InMemoryCredentialStore::new();
+        let account_repository =
+            Arc::new(FirestoreSecuritiesAccountRepository::new(credential_store));
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new());
+        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-result-checker"));
+
+        let account = build_account();
+        let stock = build_stock();
+        let mut application = LotteryApplication::create_with_values(
+            stock.identifier().clone(),
+            account.identifier().clone(),
+            Shares::new(100).expect("shares"),
+            Yen::new(1400).expect("price"),
+            Utc.with_ymd_and_hms(2026, 4, 5, 10, 0, 0)
+                .single()
+                .expect("ordered at"),
+        )
+        .expect("application");
+        application.apply().expect("apply");
+
+        Mock::given(method("POST"))
+            .and(path("/internal/lottery-results/check"))
+            .and(body_partial_json(serde_json::json!({
+                "stockIdentifier": stock.identifier().value(),
+                "credential": {
+                    "loginId": "login",
+                    "loginPassword": "password",
+                    "tradingPassword": "1234"
+                }
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "result": "Won"
+            })))
+            .mount(&browser_server)
+            .await;
+
+        account_repository.save(&account).expect("save account");
+        stock_repository.save(&stock).expect("save stock");
+        application_repository
+            .save(&application)
+            .expect("save application");
+
+        let app = create_router(DependencyContainer::from_components(
+            application_repository.clone(),
+            stock_repository,
+            account_repository,
+            Arc::new(BrowserServiceClient::new(
+                reqwest::Client::new(),
+                browser_server.uri(),
+            )),
+            event_publisher.clone(),
+            Arc::new(FirestoreOperationLogRepository::new()),
+        ));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/internal/pubsub/check")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .expect("body");
+        let json: Value = serde_json::from_slice(&body).expect("json");
+        assert_eq!(json["checkedCount"], 1);
+        assert_eq!(
+            application_repository
+                .find_by_id(application.identifier())
+                .expect("find application")
+                .expect("application")
+                .status(),
+            ApplicationStatus::ResultChecked
+        );
+        assert_eq!(
+            event_publisher
+                .published_messages()
+                .await
+                .expect("messages")
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn continues_without_publish_when_browser_service_fails() {
+        let browser_server = MockServer::start().await;
+        let credential_store = InMemoryCredentialStore::new();
+        let account_repository =
+            Arc::new(FirestoreSecuritiesAccountRepository::new(credential_store));
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new());
+        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-result-checker"));
+
+        let account = build_account();
+        let stock = build_stock();
+        let mut application = LotteryApplication::create_with_values(
+            stock.identifier().clone(),
+            account.identifier().clone(),
+            Shares::new(100).expect("shares"),
+            Yen::new(1400).expect("price"),
+            Utc.with_ymd_and_hms(2026, 4, 5, 10, 0, 0)
+                .single()
+                .expect("ordered at"),
+        )
+        .expect("application");
+        application.apply().expect("apply");
+
+        Mock::given(method("POST"))
+            .and(path("/internal/lottery-results/check"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&browser_server)
+            .await;
+
+        account_repository.save(&account).expect("save account");
+        stock_repository.save(&stock).expect("save stock");
+        application_repository
+            .save(&application)
+            .expect("save application");
+
+        let app = create_router(DependencyContainer::from_components(
+            application_repository.clone(),
+            stock_repository,
+            account_repository,
+            Arc::new(BrowserServiceClient::new(
+                reqwest::Client::new(),
+                browser_server.uri(),
+            )),
+            event_publisher.clone(),
+            Arc::new(FirestoreOperationLogRepository::new()),
+        ));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/internal/pubsub/check")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .expect("body");
+        let json: Value = serde_json::from_slice(&body).expect("json");
+        assert_eq!(json["checkedCount"], 0);
+        assert_eq!(json["results"], serde_json::json!([]));
+        assert_eq!(
+            application_repository
+                .find_by_id(application.identifier())
+                .expect("find application")
+                .expect("application")
+                .status(),
+            ApplicationStatus::Applied
+        );
+        assert_eq!(
+            event_publisher
+                .published_messages()
+                .await
+                .expect("messages")
+                .len(),
+            0
         );
     }
 }
