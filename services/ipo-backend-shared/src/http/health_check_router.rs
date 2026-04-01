@@ -32,7 +32,7 @@ mod tests {
 
     #[tokio::test]
     async fn returns_ok_health_response() {
-        let response = create_health_check_router()
+        let response = create_health_check_router::<()>()
             .oneshot(
                 Request::builder()
                     .uri("/health")

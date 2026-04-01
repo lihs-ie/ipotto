@@ -123,8 +123,9 @@ impl UpdateSecuritiesAccountUseCase {
     ) -> Result<UpdateSecuritiesAccountOutput, DomainError> {
         let identifier = SecuritiesAccountIdentifier::new(input.account_identifier)?;
         let account = self.repository.find_by_id(&identifier)?.ok_or_else(|| {
-            DomainError::FirestoreMappingError {
-                reason: format!("account not found: {}", identifier.value()),
+            DomainError::NotFound {
+                resource: "securities_account".to_string(),
+                identifier: identifier.value().to_string(),
             }
         })?;
 
@@ -193,8 +194,9 @@ impl DeleteSecuritiesAccountUseCase {
     pub fn execute(&self, account_identifier: &str) -> Result<(), DomainError> {
         let identifier = SecuritiesAccountIdentifier::new(account_identifier)?;
         if self.repository.find_by_id(&identifier)?.is_none() {
-            return Err(DomainError::FirestoreMappingError {
-                reason: format!("account not found: {}", identifier.value()),
+            return Err(DomainError::NotFound {
+                resource: "securities_account".to_string(),
+                identifier: identifier.value().to_string(),
             });
         }
         self.repository.delete(&identifier)
@@ -223,8 +225,9 @@ impl TestSecuritiesAccountConnectionUseCase {
     ) -> Result<ConnectionTestOutput, DomainError> {
         let identifier = SecuritiesAccountIdentifier::new(account_identifier)?;
         let mut account = self.repository.find_by_id(&identifier)?.ok_or_else(|| {
-            DomainError::FirestoreMappingError {
-                reason: format!("account not found: {}", identifier.value()),
+            DomainError::NotFound {
+                resource: "securities_account".to_string(),
+                identifier: identifier.value().to_string(),
             }
         })?;
 

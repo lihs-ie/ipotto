@@ -74,7 +74,6 @@ services:
       - PORT=8083
       - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
-      - IPO_BROWSER_URL=http://ipo-browser:8081
       - IPO_BROWSER_BASE_URL=http://ipo-browser:8081
       - RUST_LOG=info
     depends_on:

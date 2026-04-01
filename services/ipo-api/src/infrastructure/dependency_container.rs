@@ -53,9 +53,6 @@ impl DependencyContainer {
 
         let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
             as Arc<dyn NotificationSettingRepository + Send + Sync>;
-        if notification_setting_repository.find_by_id(&ipo_backend_shared::domain::notification::NotificationSettingIdentifier::default_id())?.is_none() {
-            notification_setting_repository.save(&NotificationSetting::create(Vec::new())?)?;
-        }
 
         let line_adapter = Arc::new(LineNotificationAdapter::new(client.clone()))
             as Arc<dyn NotificationPort + Send + Sync>;

@@ -89,18 +89,8 @@ impl CheckLotteryResultUseCase {
                 Ok(Some(result)) => {
                     application.record_outcome(result, Utc::now())?;
                     self.application_repository.save(&application)?;
-                    self.operation_log_repository.save(&OperationLog::create(
-                        OperationLogPayload::new(
-                            Some(application.identifier().clone()),
-                            OperationEventType::CheckLotteryResult,
-                            "ipo-result-checker",
-                            OperationStatus::Succeeded,
-                            format!("checked {}", stock.identifier().value()),
-                            None,
-                            Utc::now(),
-                        ),
-                    )?)?;
-                    self.event_publisher
+                    let publish_result = self
+                        .event_publisher
                         .publish(
                             "ipo-result-updated",
                             application.identifier().value(),
@@ -118,7 +108,40 @@ impl CheckLotteryResultUseCase {
                             })?,
                             None,
                         )
-                        .await?;
+                        .await;
+
+                    match publish_result {
+                        Ok(()) => {
+                            self.operation_log_repository.save(&OperationLog::create(
+                                OperationLogPayload::new(
+                                    Some(application.identifier().clone()),
+                                    OperationEventType::CheckLotteryResult,
+                                    "ipo-result-checker",
+                                    OperationStatus::Succeeded,
+                                    format!("checked {}", stock.identifier().value()),
+                                    None,
+                                    Utc::now(),
+                                ),
+                            )?)?;
+                        }
+                        Err(error) => {
+                            self.operation_log_repository.save(&OperationLog::create(
+                                OperationLogPayload::new(
+                                    Some(application.identifier().clone()),
+                                    OperationEventType::CheckLotteryResult,
+                                    "ipo-result-checker",
+                                    OperationStatus::Failed,
+                                    format!(
+                                        "failed to publish result update for {}",
+                                        stock.identifier().value()
+                                    ),
+                                    Some(error.to_string()),
+                                    Utc::now(),
+                                ),
+                            )?)?;
+                        }
+                    }
+
                     checked_count += 1;
                     results.push(ResultCheckEntry {
                         application_identifier: application.identifier().value().to_string(),
@@ -172,8 +195,9 @@ mod tests {
 
     use async_trait::async_trait;
     use chrono::{NaiveDate, TimeZone, Utc};
+    use uuid::Uuid;
     use ipo_backend_shared::{
-        acl::{browser::BrokerBrowserPort, scraping::ScrapedStock},
+        acl::{browser::BrokerBrowserPort, messaging::EventPublisherPort, scraping::ScrapedStock},
         domain::{
             account::{
                 AccountCredential, ConnectionTestResult, ImapHost, ImapPort, LoginId,
@@ -183,6 +207,7 @@ mod tests {
             application::{
                 ApplicationStatus, LotteryApplication, LotteryApplicationRepository, LotteryResult,
             },
+            operation_log::{OperationLogRepository, OperationStatus},
             stock::{
                 BookBuildingPeriod, CompanyName, CompanyProfile, FetchOrigin, Industry,
                 IpoOffering, IpoPricing, IpoSchedule, IpoStock, IpoStockRepository,
@@ -222,6 +247,25 @@ mod tests {
             _stock: &IpoStock,
         ) -> Result<Option<LotteryResult>, DomainError> {
             Ok(Some(LotteryResult::Won))
+        }
+    }
+
+    #[derive(Debug)]
+    struct FailingPublisher;
+
+    #[async_trait]
+    impl EventPublisherPort for FailingPublisher {
+        async fn publish(
+            &self,
+            _event_type: &str,
+            _aggregate_id: &str,
+            _aggregate_type: &str,
+            _payload: serde_json::Value,
+            _correlation_id: Option<Uuid>,
+        ) -> Result<(), DomainError> {
+            Err(DomainError::PubSubPublishError {
+                reason: "publisher unavailable".to_string(),
+            })
         }
     }
 
@@ -352,6 +396,66 @@ mod tests {
         assert_eq!(
             envelope.payload["lottery_result"],
             serde_json::Value::String("Won".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn continues_when_event_publish_fails_after_persisting_result() {
+        let credential_store = InMemoryCredentialStore::new();
+        let account_repository =
+            Arc::new(FirestoreSecuritiesAccountRepository::new(credential_store));
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new());
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new());
+
+        let account = build_account();
+        let stock = build_stock();
+        let mut application = LotteryApplication::create_with_values(
+            stock.identifier().clone(),
+            account.identifier().clone(),
+            Shares::new(100).expect("shares"),
+            Yen::new(1400).expect("price"),
+            Utc.with_ymd_and_hms(2026, 4, 5, 10, 0, 0)
+                .single()
+                .expect("ordered at"),
+        )
+        .expect("application");
+        application.apply().expect("apply");
+
+        account_repository.save(&account).expect("save account");
+        stock_repository.save(&stock).expect("save stock");
+        application_repository
+            .save(&application)
+            .expect("save application");
+
+        let output = CheckLotteryResultUseCase::new(
+            application_repository.clone(),
+            stock_repository,
+            account_repository,
+            Arc::new(WinningBrowser),
+            Arc::new(FailingPublisher),
+            operation_log_repository.clone(),
+        )
+        .execute()
+        .await
+        .expect("execute");
+
+        assert_eq!(output.checked_count, 1);
+        assert_eq!(
+            application_repository
+                .find_by_id(application.identifier())
+                .expect("find application")
+                .expect("application")
+                .status(),
+            ApplicationStatus::ResultChecked
+        );
+
+        let logs = operation_log_repository.find_all().expect("logs");
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].status(), OperationStatus::Failed);
+        assert_eq!(
+            logs[0].error_message(),
+            Some("pubsub publish error: publisher unavailable")
         );
     }
 }

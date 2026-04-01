@@ -207,8 +207,9 @@ impl GetIpoStockUseCase {
         let stock = self
             .stock_repository
             .find_by_id(&stock_identifier)?
-            .ok_or_else(|| DomainError::FirestoreMappingError {
-                reason: format!("stock not found: {}", stock_identifier.value()),
+            .ok_or_else(|| DomainError::NotFound {
+                resource: "stock".to_string(),
+                identifier: stock_identifier.value().to_string(),
             })?;
 
         let applications = self
@@ -457,9 +458,9 @@ fn parse_stock_status(value: &str) -> Result<StockStatus, DomainError> {
         "Sold" => Ok(StockStatus::Sold),
         "Excluded" => Ok(StockStatus::Excluded),
         "Failed" => Ok(StockStatus::Failed),
-        other => Err(DomainError::InvalidStatusTransition {
-            from: other.to_string(),
-            to: "StockStatus".to_string(),
+        other => Err(DomainError::ValidationError {
+            field: "status".to_string(),
+            message: format!("invalid status value: {other}"),
         }),
     }
 }

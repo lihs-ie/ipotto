@@ -46,6 +46,10 @@ impl ApiError {
         Self::new(StatusCode::CONFLICT, code, message, None)
     }
 
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::NOT_FOUND, "NOT_FOUND", message, None)
+    }
+
     pub fn service_unavailable(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self::new(StatusCode::SERVICE_UNAVAILABLE, code, message, None)
     }
@@ -54,6 +58,11 @@ impl ApiError {
 impl From<DomainError> for ApiError {
     fn from(error: DomainError) -> Self {
         match error {
+            DomainError::ValidationError { field, message } => Self::validation(message, field),
+            DomainError::NotFound {
+                resource,
+                identifier,
+            } => Self::not_found(format!("{resource} not found: {identifier}")),
             DomainError::DuplicateExclusion { .. } => {
                 Self::conflict("CONFLICT", "同一企業名の除外銘柄が既に存在します")
             }
@@ -73,7 +82,9 @@ impl From<DomainError> for ApiError {
             | DomainError::InvalidShares { .. }
             | DomainError::InvalidYen { .. }
             | DomainError::InvalidSchedule { .. }
-            | DomainError::InvalidSecuritiesCompany { .. } => Self::new(
+            | DomainError::InvalidSecuritiesCompany { .. }
+            | DomainError::InvalidStatusTransition { .. }
+            | DomainError::OperationLogValidationError { .. } => Self::new(
                 StatusCode::BAD_REQUEST,
                 "VALIDATION_ERROR",
                 error.to_string(),
@@ -109,5 +120,45 @@ impl IntoResponse for ApiError {
             },
         };
         (status, Json(body)).into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{http::StatusCode, response::IntoResponse};
+    use ipo_backend_shared::errors::DomainError;
+
+    use super::ApiError;
+
+    #[test]
+    fn maps_validation_errors_to_bad_request() {
+        let response = ApiError::from(DomainError::ValidationError {
+            field: "status".to_string(),
+            message: "invalid status value: nope".to_string(),
+        })
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn maps_not_found_errors_to_not_found() {
+        let response = ApiError::from(DomainError::NotFound {
+            resource: "stock".to_string(),
+            identifier: "01H...".to_string(),
+        })
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn maps_operation_log_validation_errors_to_bad_request() {
+        let response = ApiError::from(DomainError::OperationLogValidationError {
+            reason: "invalid date".to_string(),
+        })
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }

@@ -50,19 +50,40 @@ impl ListOperationLogsUseCase {
         &self,
         input: ListOperationLogsInput,
     ) -> Result<ListOperationLogsOutput, DomainError> {
-        let mut logs = self.repository.find_all()?;
-        if let Some(start_date) = input.start_date {
-            let start = parse_start_date(&start_date)?;
-            logs.retain(|log| log.executed_at() >= start);
-        }
-        if let Some(end_date) = input.end_date {
-            let end = parse_end_date(&end_date)?;
-            logs.retain(|log| log.executed_at() <= end);
-        }
-        if let Some(event_type) = input.event_type {
-            let event_type = parse_event_type(&event_type)?;
-            logs.retain(|log| log.event_type() == event_type);
-        }
+        let start = input
+            .start_date
+            .as_deref()
+            .map(parse_start_date)
+            .transpose()?;
+        let end = input.end_date.as_deref().map(parse_end_date).transpose()?;
+        let event_type = input
+            .event_type
+            .as_deref()
+            .map(parse_event_type)
+            .transpose()?;
+
+        let mut logs = match (start, end, event_type) {
+            (Some(start), Some(end), Some(event_type)) => {
+                let mut logs = self.repository.find_by_date_range(start, end)?;
+                logs.retain(|log| log.event_type() == event_type);
+                logs
+            }
+            (Some(start), Some(end), None) => self.repository.find_by_date_range(start, end)?,
+            (None, None, Some(event_type)) => self.repository.find_by_event_type(event_type)?,
+            (start, end, event_type) => {
+                let mut logs = self.repository.find_all()?;
+                if let Some(start) = start {
+                    logs.retain(|log| log.executed_at() >= start);
+                }
+                if let Some(end) = end {
+                    logs.retain(|log| log.executed_at() <= end);
+                }
+                if let Some(event_type) = event_type {
+                    logs.retain(|log| log.event_type() == event_type);
+                }
+                logs
+            }
+        };
 
         logs.sort_by_key(|log| Reverse(log.executed_at()));
         if let Some(cursor) = input.cursor {
@@ -143,5 +164,117 @@ fn parse_event_type(value: &str) -> Result<OperationEventType, DomainError> {
         other => Err(DomainError::OperationLogValidationError {
             reason: format!("unsupported event type: {other}"),
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+    };
+
+    use chrono::{TimeZone, Utc};
+    use ipo_backend_shared::domain::operation_log::{
+        OperationEventType, OperationLog, OperationLogPayload, OperationLogRepository,
+        OperationStatus,
+    };
+
+    use super::{ListOperationLogsInput, ListOperationLogsUseCase};
+
+    #[derive(Debug, Default)]
+    struct CountingRepository {
+        logs: Vec<OperationLog>,
+        find_all_calls: AtomicUsize,
+        find_by_date_range_calls: AtomicUsize,
+        find_by_event_type_calls: AtomicUsize,
+    }
+
+    impl CountingRepository {
+        fn new(logs: Vec<OperationLog>) -> Self {
+            Self {
+                logs,
+                ..Self::default()
+            }
+        }
+    }
+
+    impl OperationLogRepository for CountingRepository {
+        fn save(&self, _log: &OperationLog) -> Result<(), ipo_backend_shared::errors::DomainError> {
+            Ok(())
+        }
+
+        fn find_all(&self) -> Result<Vec<OperationLog>, ipo_backend_shared::errors::DomainError> {
+            self.find_all_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(self.logs.clone())
+        }
+
+        fn find_by_date_range(
+            &self,
+            start: chrono::DateTime<Utc>,
+            end: chrono::DateTime<Utc>,
+        ) -> Result<Vec<OperationLog>, ipo_backend_shared::errors::DomainError> {
+            self.find_by_date_range_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(self
+                .logs
+                .iter()
+                .filter(|log| log.executed_at() >= start && log.executed_at() <= end)
+                .cloned()
+                .collect())
+        }
+
+        fn find_by_event_type(
+            &self,
+            event_type: OperationEventType,
+        ) -> Result<Vec<OperationLog>, ipo_backend_shared::errors::DomainError> {
+            self.find_by_event_type_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(self
+                .logs
+                .iter()
+                .filter(|log| log.event_type() == event_type)
+                .cloned()
+                .collect())
+        }
+    }
+
+    fn build_log(event_type: OperationEventType, day: u32) -> OperationLog {
+        OperationLog::create(OperationLogPayload::new(
+            None,
+            event_type,
+            "ipo-api",
+            OperationStatus::Succeeded,
+            "ok",
+            None,
+            Utc.with_ymd_and_hms(2026, 4, day, 10, 0, 0)
+                .single()
+                .expect("timestamp"),
+        ))
+        .expect("log")
+    }
+
+    #[test]
+    fn uses_repository_level_filtering_before_in_memory_filtering() {
+        let repository = Arc::new(CountingRepository::new(vec![
+            build_log(OperationEventType::FetchStocks, 1),
+            build_log(OperationEventType::ConnectionTest, 2),
+        ]));
+        let use_case = ListOperationLogsUseCase::new(repository.clone());
+
+        let output = use_case
+            .execute(ListOperationLogsInput {
+                start_date: Some("2026-04-01".to_string()),
+                end_date: Some("2026-04-30".to_string()),
+                event_type: Some("fetch_stocks".to_string()),
+                cursor: None,
+                limit: None,
+            })
+            .expect("execute");
+
+        assert_eq!(output.items.len(), 1);
+        assert_eq!(repository.find_all_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(repository.find_by_date_range_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(repository.find_by_event_type_calls.load(Ordering::SeqCst), 0);
     }
 }
