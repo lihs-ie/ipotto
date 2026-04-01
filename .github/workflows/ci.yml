@@ -44,13 +44,13 @@ jobs:
         with:
           workspaces: services
       - name: Run shared infrastructure integration tests
-        run: cargo test -p ipo-backend-shared infrastructure::
+        run: "cargo test -p ipo-backend-shared infrastructure::"
       - name: Run ipo-api integration tests
-        run: cargo test -p ipo-api presentation::routes::tests::
+        run: "cargo test -p ipo-api presentation::routes::tests::"
       - name: Run ipo-info-fetcher integration tests
-        run: cargo test -p ipo-info-fetcher presentation::routes::tests::
+        run: "cargo test -p ipo-info-fetcher presentation::routes::tests::"
       - name: Run ipo-result-checker integration tests
-        run: cargo test -p ipo-result-checker presentation::routes::tests::
+        run: "cargo test -p ipo-result-checker presentation::routes::tests::"
 
   docker-compose-smoke:
     name: Docker Compose Smoke
