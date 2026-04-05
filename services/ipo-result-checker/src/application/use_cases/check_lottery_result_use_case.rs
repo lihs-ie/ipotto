@@ -195,7 +195,6 @@ mod tests {
 
     use async_trait::async_trait;
     use chrono::{NaiveDate, TimeZone, Utc};
-    use uuid::Uuid;
     use ipo_backend_shared::{
         acl::{browser::BrokerBrowserPort, messaging::EventPublisherPort, scraping::ScrapedStock},
         domain::{
@@ -222,6 +221,7 @@ mod tests {
             InMemoryCredentialStore, PubSubEventPublisher,
         },
     };
+    use uuid::Uuid;
 
     use super::CheckLotteryResultUseCase;
 

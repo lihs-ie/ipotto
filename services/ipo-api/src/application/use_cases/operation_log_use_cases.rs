@@ -169,11 +169,9 @@ fn parse_event_type(value: &str) -> Result<OperationEventType, DomainError> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc,
-        },
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
     };
 
     use chrono::{TimeZone, Utc};
@@ -274,7 +272,13 @@ mod tests {
 
         assert_eq!(output.items.len(), 1);
         assert_eq!(repository.find_all_calls.load(Ordering::SeqCst), 0);
-        assert_eq!(repository.find_by_date_range_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(repository.find_by_event_type_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            repository.find_by_date_range_calls.load(Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            repository.find_by_event_type_calls.load(Ordering::SeqCst),
+            0
+        );
     }
 }

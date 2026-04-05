@@ -122,12 +122,13 @@ impl UpdateSecuritiesAccountUseCase {
         input: UpdateSecuritiesAccountInput,
     ) -> Result<UpdateSecuritiesAccountOutput, DomainError> {
         let identifier = SecuritiesAccountIdentifier::new(input.account_identifier)?;
-        let account = self.repository.find_by_id(&identifier)?.ok_or_else(|| {
-            DomainError::NotFound {
-                resource: "securities_account".to_string(),
-                identifier: identifier.value().to_string(),
-            }
-        })?;
+        let account =
+            self.repository
+                .find_by_id(&identifier)?
+                .ok_or_else(|| DomainError::NotFound {
+                    resource: "securities_account".to_string(),
+                    identifier: identifier.value().to_string(),
+                })?;
 
         let credential = build_credential(
             input
@@ -224,12 +225,13 @@ impl TestSecuritiesAccountConnectionUseCase {
         account_identifier: &str,
     ) -> Result<ConnectionTestOutput, DomainError> {
         let identifier = SecuritiesAccountIdentifier::new(account_identifier)?;
-        let mut account = self.repository.find_by_id(&identifier)?.ok_or_else(|| {
-            DomainError::NotFound {
-                resource: "securities_account".to_string(),
-                identifier: identifier.value().to_string(),
-            }
-        })?;
+        let mut account =
+            self.repository
+                .find_by_id(&identifier)?
+                .ok_or_else(|| DomainError::NotFound {
+                    resource: "securities_account".to_string(),
+                    identifier: identifier.value().to_string(),
+                })?;
 
         let result = self
             .browser_port

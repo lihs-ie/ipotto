@@ -108,9 +108,7 @@ impl FetchIpoStocksUseCase {
         fetched_count: &mut u32,
         updated_count: &mut u32,
     ) -> Result<(), DomainError> {
-        let existing = existing_stocks
-            .get(scraped_stock.company_name())
-            .cloned();
+        let existing = existing_stocks.get(scraped_stock.company_name()).cloned();
         let update = build_stock_update(scraped_stock)?;
 
         if let Some(mut stock) = existing {
@@ -256,11 +254,9 @@ fn build_stock_update(scraped_stock: &ScrapedStock) -> Result<IpoStockUpdate, Do
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc,
-        },
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
     };
 
     use async_trait::async_trait;
@@ -306,8 +302,10 @@ mod tests {
         fn find_by_id(
             &self,
             identifier: &ipo_backend_shared::domain::stock::StockIdentifier,
-        ) -> Result<Option<ipo_backend_shared::domain::stock::IpoStock>, ipo_backend_shared::errors::DomainError>
-        {
+        ) -> Result<
+            Option<ipo_backend_shared::domain::stock::IpoStock>,
+            ipo_backend_shared::errors::DomainError,
+        > {
             self.inner.find_by_id(identifier)
         }
 
@@ -320,8 +318,10 @@ mod tests {
 
         fn find_all(
             &self,
-        ) -> Result<Vec<ipo_backend_shared::domain::stock::IpoStock>, ipo_backend_shared::errors::DomainError>
-        {
+        ) -> Result<
+            Vec<ipo_backend_shared::domain::stock::IpoStock>,
+            ipo_backend_shared::errors::DomainError,
+        > {
             self.find_all_calls.fetch_add(1, Ordering::SeqCst);
             self.inner.find_all()
         }
@@ -329,16 +329,20 @@ mod tests {
         fn find_by_status(
             &self,
             status: ipo_backend_shared::domain::stock::StockStatus,
-        ) -> Result<Vec<ipo_backend_shared::domain::stock::IpoStock>, ipo_backend_shared::errors::DomainError>
-        {
+        ) -> Result<
+            Vec<ipo_backend_shared::domain::stock::IpoStock>,
+            ipo_backend_shared::errors::DomainError,
+        > {
             self.inner.find_by_status(status)
         }
 
         fn find_in_book_building_period(
             &self,
             date: NaiveDate,
-        ) -> Result<Vec<ipo_backend_shared::domain::stock::IpoStock>, ipo_backend_shared::errors::DomainError>
-        {
+        ) -> Result<
+            Vec<ipo_backend_shared::domain::stock::IpoStock>,
+            ipo_backend_shared::errors::DomainError,
+        > {
             self.inner.find_in_book_building_period(date)
         }
     }

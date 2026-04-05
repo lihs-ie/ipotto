@@ -83,12 +83,13 @@ impl RemoveExclusionUseCase {
 
     pub fn execute(&self, identifier: &str) -> Result<(), DomainError> {
         let identifier = ExclusionIdentifier::new(identifier)?;
-        let exclusion = self.repository.find_by_id(&identifier)?.ok_or_else(|| {
-            DomainError::NotFound {
-                resource: "exclusion".to_string(),
-                identifier: identifier.value().to_string(),
-            }
-        })?;
+        let exclusion =
+            self.repository
+                .find_by_id(&identifier)?
+                .ok_or_else(|| DomainError::NotFound {
+                    resource: "exclusion".to_string(),
+                    identifier: identifier.value().to_string(),
+                })?;
         self.repository.delete(exclusion.identifier())
     }
 }
