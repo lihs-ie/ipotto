@@ -82,3 +82,76 @@ impl IpoStockScraperPort for ExternalSiteScraperAdapter {
 struct ScrapedStockResponse {
     stocks: Vec<ScrapedStock>,
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::NaiveDate;
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
+
+    use super::ExternalSiteScraperAdapter;
+    use crate::acl::scraping::{IpoStockScraperPort, ScrapedStock};
+
+    fn build_stock() -> ScrapedStock {
+        ScrapedStock::new(
+            "テスト株式会社",
+            Some("1234".to_string()),
+            "Growth",
+            "情報・通信業",
+            NaiveDate::from_ymd_opt(2026, 4, 1).expect("bb start"),
+            NaiveDate::from_ymd_opt(2026, 4, 10).expect("bb end"),
+            NaiveDate::from_ymd_opt(2026, 4, 15).expect("lottery"),
+            NaiveDate::from_ymd_opt(2026, 4, 25).expect("listing"),
+            1200,
+            1500,
+            Some(1400),
+            "楽天証券",
+            100000,
+        )
+    }
+
+    #[tokio::test]
+    async fn scrapes_direct_json_array_response() {
+        let server = MockServer::start().await;
+        let expected = vec![build_stock()];
+
+        Mock::given(method("GET"))
+            .and(path("/stocks"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&expected))
+            .mount(&server)
+            .await;
+
+        let adapter = ExternalSiteScraperAdapter::new(
+            reqwest::Client::new(),
+            format!("{}/stocks", server.uri()),
+        );
+        let actual = adapter.scrape().await.expect("scrape");
+
+        assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn scrapes_wrapped_json_response() {
+        let server = MockServer::start().await;
+        let expected = vec![build_stock()];
+
+        Mock::given(method("GET"))
+            .and(path("/wrapped"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({ "stocks": expected })),
+            )
+            .mount(&server)
+            .await;
+
+        let adapter = ExternalSiteScraperAdapter::new(
+            reqwest::Client::new(),
+            format!("{}/wrapped", server.uri()),
+        );
+        let actual = adapter.scrape().await.expect("scrape");
+
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0].company_name(), "テスト株式会社");
+    }
+}

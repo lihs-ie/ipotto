@@ -3,6 +3,15 @@ use thiserror::Error;
 /// Shared domain-level errors across backend services.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum DomainError {
+    #[error("validation error on {field}: {message}")]
+    ValidationError { field: String, message: String },
+
+    #[error("{resource} not found: {identifier}")]
+    NotFound {
+        resource: String,
+        identifier: String,
+    },
+
     #[error("invalid status transition: {from} -> {to}")]
     InvalidStatusTransition { from: String, to: String },
 

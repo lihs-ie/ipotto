@@ -1,0 +1,17 @@
+[
+  {
+    "company_name": "CIテスト株式会社",
+    "ticker_symbol": "4321",
+    "market": "Growth",
+    "industry": "情報・通信業",
+    "book_building_start_date": "2026-04-01",
+    "book_building_end_date": "2026-04-10",
+    "lottery_date": "2026-04-15",
+    "listing_date": "2026-04-25",
+    "price_range_min": 1200,
+    "price_range_max": 1500,
+    "offer_price": 1400,
+    "lead_underwriter": "楽天証券",
+    "number_of_offered_shares": 100000
+  }
+]

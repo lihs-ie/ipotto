@@ -8,7 +8,10 @@ struct HealthCheckResponse {
 }
 
 /// Creates a shared health check router.
-pub fn create_health_check_router() -> Router {
+pub fn create_health_check_router<S>() -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
     Router::new().route("/health", get(health_check))
 }
 
@@ -29,7 +32,7 @@ mod tests {
 
     #[tokio::test]
     async fn returns_ok_health_response() {
-        let response = create_health_check_router()
+        let response = create_health_check_router::<()>()
             .oneshot(
                 Request::builder()
                     .uri("/health")

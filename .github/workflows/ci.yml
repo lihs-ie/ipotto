@@ -31,6 +31,100 @@ jobs:
       - name: Coverage
         run: cargo llvm-cov --all --lcov --output-path lcov.info
 
+  rust-integration-tests:
+    name: Rust Integration Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services
+      - name: Run shared infrastructure integration tests
+        run: "cargo test -p ipo-backend-shared infrastructure::"
+      - name: Run ipo-api integration tests
+        run: "cargo test -p ipo-api presentation::routes::tests::"
+      - name: Run ipo-info-fetcher integration tests
+        run: "cargo test -p ipo-info-fetcher presentation::routes::tests::"
+      - name: Run ipo-result-checker integration tests
+        run: "cargo test -p ipo-result-checker presentation::routes::tests::"
+
+  docker-compose-smoke:
+    name: Docker Compose Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Start integration infrastructure
+        run: |
+          docker compose up -d \
+            firebase-emulator \
+            pubsub-emulator \
+            html-mock-server \
+            ipo-browser \
+            ipo-api \
+            ipo-info-fetcher \
+            ipo-result-checker
+          docker compose ps
+
+      - name: Setup Pub/Sub emulator
+        env:
+          PUBSUB_EMULATOR_HOST: localhost:8085
+          GCP_PROJECT: ipotto-local
+        run: bash scripts/setup-pubsub-emulator.sh
+
+      - name: Wait for services
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:8081/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:8082/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:8083/health > /dev/null 2>&1; then
+              echo "Services ready"
+              exit 0
+            fi
+            echo "Waiting for services... ($i/60)"
+            sleep 2
+          done
+          echo "Services failed to start"
+          docker compose logs
+          exit 1
+
+      - name: Smoke test ipo-api
+        run: |
+          curl -sf http://localhost:8080/health | jq -e '.status == "ok"'
+          curl -sf http://localhost:8080/api/v1/stocks | jq -e 'has("items") and has("totalCount")'
+          curl -sf -X POST http://localhost:8080/api/v1/exclusions \
+            -H 'content-type: application/json' \
+            -d '{"companyName":"CIテスト株式会社","reason":"smoke"}' \
+            | jq -e '.companyName == "CIテスト株式会社"'
+
+      - name: Smoke test ipo-info-fetcher
+        run: |
+          curl -sf http://localhost:8082/health | jq -e '.status == "ok"'
+          curl -sf -X POST http://localhost:8082/internal/pubsub/fetch \
+            | tee /tmp/ipo-info-fetcher-response.json
+          jq -e '.fetchedCount >= 1' /tmp/ipo-info-fetcher-response.json
+
+      - name: Smoke test ipo-result-checker
+        run: |
+          curl -sf http://localhost:8083/health | jq -e '.status == "ok"'
+          curl -sf -X POST http://localhost:8083/internal/pubsub/check \
+            | tee /tmp/ipo-result-checker-response.json
+          jq -e '.checkedCount == 0' /tmp/ipo-result-checker-response.json
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop infrastructure
+        if: success() || failure()
+        run: docker compose down
+
   node-lint-test:
     runs-on: ubuntu-latest
     strategy:

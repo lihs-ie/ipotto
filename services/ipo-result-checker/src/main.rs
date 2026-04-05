@@ -9,7 +9,9 @@ mod presentation;
 
 #[tokio::main]
 async fn main() {
-    let router = presentation::routes::create_router();
+    let container = infrastructure::DependencyContainer::new()
+        .expect("failed to construct ipo-result-checker dependency container");
+    let router = presentation::routes::create_router(container);
     run_http_service(config::HTTP_SERVICE_CONFIG, router)
         .await
         .unwrap_or_else(|error| panic!("failed to run http service: {error}"));
