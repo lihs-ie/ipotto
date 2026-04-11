@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +12,9 @@ const referenceRoot = resolve(repositoryRoot, "docs/reference");
 const mockFixtureRoot = resolve(
   currentDirectory,
   "../../../tests/fixtures/html/rakuten",
+);
+const hasReferenceHtml = existsSync(
+  resolve(referenceRoot, "楽天証券", "ログイン成功後のダッシュボード画面.html"),
 );
 
 /**
@@ -28,7 +31,9 @@ function readMockHtml(fileName: string): string {
   return readFileSync(resolve(mockFixtureRoot, fileName), "utf8");
 }
 
-describe("Rakuten reference HTML contracts", () => {
+const referenceDescribe = hasReferenceHtml ? describe : describe.skip;
+
+referenceDescribe("Rakuten reference HTML contracts", () => {
   it("matches dashboard markers used for login success detection", () => {
     const html = readReferenceHtml(
       "楽天証券",
@@ -99,7 +104,9 @@ describe("Rakuten reference HTML contracts", () => {
 });
 
 describe("detectApplicationResultFromText", () => {
-  it("detects success from real Rakuten HTML", () => {
+  const referenceIt = hasReferenceHtml ? it : it.skip;
+
+  referenceIt("detects success from real Rakuten HTML", () => {
     const html = readReferenceHtml("楽天証券", "IPO申し込み成功画面.html");
 
     expect(detectApplicationResultFromText(html, "application failed")).toEqual({
@@ -107,7 +114,7 @@ describe("detectApplicationResultFromText", () => {
     });
   });
 
-  it("detects already applied from real Rakuten HTML", () => {
+  referenceIt("detects already applied from real Rakuten HTML", () => {
     const html = readReferenceHtml("楽天証券", "IPO申し込み済み詳細.html");
 
     expect(detectApplicationResultFromText(html, "application failed")).toEqual({
