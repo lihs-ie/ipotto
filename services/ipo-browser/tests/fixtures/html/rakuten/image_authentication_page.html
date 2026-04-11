@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>楽天証券 画像認証</title></head>
+<body data-page="image-authentication">
+  <h1>画像認証</h1>
+  <p>メールに記載された2つのキーワードに一致する画像を順番に選択してください。</p>
+  <div id="images">
+    <button data-auth-image type="button"><img src="#" alt="さくら" /></button>
+    <button data-auth-image type="button"><img src="#" alt="みかん" /></button>
+    <button data-auth-image type="button"><img src="#" alt="りんご" /></button>
+    <button data-auth-image type="button"><img src="#" alt="ぶどう" /></button>
+    <button data-auth-image type="button"><img src="#" alt="ねこ" /></button>
+    <button data-auth-image type="button"><img src="#" alt="いぬ" /></button>
+    <button data-auth-image type="button"><img src="#" alt="くるま" /></button>
+    <button data-auth-image type="button"><img src="#" alt="でんしゃ" /></button>
+    <button data-auth-image type="button"><img src="#" alt="そら" /></button>
+    <button data-auth-image type="button"><img src="#" alt="うみ" /></button>
+  </div>
+  <script>
+    const selected = [];
+    document.querySelectorAll("[data-auth-image]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const image = button.querySelector("img");
+        selected.push(image?.alt ?? "");
+        if (selected.length === 2) {
+          if (selected[0] === "さくら" && selected[1] === "みかん") {
+            window.location.href = "./dashboard.html";
+            return;
+          }
+          window.location.href = "./image_authentication_error.html";
+        }
+      });
+    });
+  </script>
+</body>
+</html>
