@@ -43,6 +43,9 @@ referenceDescribe("Rakuten reference HTML contracts", () => {
     expect(html).toContain("<title>ホーム | 楽天証券[PC]</title>");
     expect(html).toContain('id="ratPageName" value="[member]/app/home.do"');
     expect(html).toContain("/app/home.do");
+    expect(html).toContain('form name="HomeForm"');
+    expect(html).toContain('class="pcm-gl-nav-02__link"');
+    expect(html).toContain("ホーム画面の見方");
   });
 
   it("matches image authentication markers used for additional authentication detection", () => {
@@ -67,6 +70,8 @@ referenceDescribe("Rakuten reference HTML contracts", () => {
 
     expect(html).toContain('class="pcmm_ipolt-ipo-block"');
     expect(html).toContain('class="pcmm_ipolt-ipo-block__stockname"');
+    expect(html).toContain("ブックビルディング受付中");
+    expect(html).toContain("ブックビルディング未申込");
     expect(html).toContain("ブックビルディング申込");
     expect(html).toContain("銘柄詳細を見る");
   });
@@ -95,11 +100,30 @@ referenceDescribe("Rakuten reference HTML contracts", () => {
     );
 
     expect(cautionHtml).toContain("同意して次へ");
+    expect(cautionHtml).toContain("BB参加 / 注意事項");
+    expect(cautionHtml).toContain('id="ratPageName" value="[member]/app/ipo_jp_join_caution.do"');
     expect(inputHtml).toContain('id="orderValueInput"');
+    expect(inputHtml).toContain('name="orderValueInput"');
     expect(inputHtml).toContain('id="priceSpinnerComBox"');
+    expect(inputHtml).toContain('class="pcmm-slb__input is-select"');
     expect(inputHtml).toContain("申込内容を確認する");
+    expect(inputHtml).toContain("BB参加 / 受付");
+    expect(inputHtml).toContain('id="ratPageName" value="[member]/app/ipo_jp_join_input.do"');
     expect(confirmHtml).toContain('id="passwordInputText"');
+    expect(confirmHtml).toContain('name="password"');
     expect(confirmHtml).toContain("申し込む");
+    expect(confirmHtml).toContain("BB参加 / 確認");
+    expect(confirmHtml).toContain('id="ratPageName" value="[member]/app/ipo_jp_join_confirm.do"');
+  });
+
+  it("matches selectors used on the IPO application result page", () => {
+    const resultHtml = readReferenceHtml("楽天証券", "IPO申し込み成功画面.html");
+
+    expect(resultHtml).toContain("BB参加 / 完了");
+    expect(resultHtml).toContain("ブックビルディングの申込を受け付けました");
+    expect(resultHtml).toContain(
+      'id="ratPageName" value="[member]/app/ipo_jp_join_result.do"',
+    );
   });
 });
 
@@ -130,6 +154,18 @@ describe("detectApplicationResultFromText", () => {
     });
   });
 
+  it("detects generic application failure from the mock HTML fixture", () => {
+    const html = readMockHtml("ipo_application_failure.html");
+
+    expect(
+      detectApplicationResultFromText(html, "申し込みに失敗しました"),
+    ).toEqual({
+      status: "failure",
+      reason: "申し込みに失敗しました",
+      category: "application",
+    });
+  });
+
   it("returns a failure with the supplied reason when no markers match", () => {
     expect(
       detectApplicationResultFromText(
@@ -139,6 +175,7 @@ describe("detectApplicationResultFromText", () => {
     ).toEqual({
       status: "failure",
       reason: "申し込みに失敗しました",
+      category: "application",
     });
   });
 });

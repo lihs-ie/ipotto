@@ -1,9 +1,25 @@
 /**
  * Result of a lottery application attempt on the broker site.
  */
+export type ApplicationFailureCategory =
+  /**
+   * Browser-side application failures such as login failure, 2FA page transition
+   * failure, selector mismatch, and unexpected page navigation.
+   */
+  | "application"
+  | "image_authentication"
+  | "mail_retrieval";
+
+/**
+ * Result of a lottery application attempt on the broker site.
+ */
 export type ApplicationResult =
   | { readonly status: "success" }
-  | { readonly status: "failure"; readonly reason: string }
+  | {
+      readonly status: "failure";
+      readonly reason: string;
+      readonly category: ApplicationFailureCategory;
+    }
   | { readonly status: "already_applied" }
   | { readonly status: "insufficient_balance" };
 
@@ -19,8 +35,9 @@ export function createSuccessfulApplicationResult(): ApplicationResult {
  */
 export function createFailedApplicationResult(
   reason: string,
+  category: ApplicationFailureCategory = "application",
 ): ApplicationResult {
-  return { status: "failure", reason };
+  return { status: "failure", reason, category };
 }
 
 /**

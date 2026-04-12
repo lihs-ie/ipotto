@@ -2,13 +2,23 @@ import type {
   ActiveSecuritiesAccount,
   AccountCredential,
 } from "../../domain/account-credential.js";
-import type { ApplicationResult } from "../../domain/application-result.js";
+import type {
+  ApplicationFailureCategory,
+  ApplicationResult,
+} from "../../domain/application-result.js";
 import { generateUlid } from "../../domain/generate-ulid.js";
 import type { ExclusionEntry, TargetIpoStock } from "../../domain/ipo-stock.js";
 import type {
+  ApplicationCompletedPayload,
+  ApplicationFailedPayload,
+  ImageAuthenticationFailedPayload,
   LotteryApplicationRecord,
   NotificationEventEnvelope,
   OperationLogEntry,
+  OperationErrorOccurredPayload,
+} from "../../domain/notification-event.js";
+import {
+  OPERATION_LOG_EVENT_TYPES,
 } from "../../domain/notification-event.js";
 
 /**
@@ -19,6 +29,19 @@ export interface ApplyForLotteryInput {
 }
 
 /**
+ * Validation error raised for invalid DD-101 input.
+ */
+export class ApplyForLotteryValidationError extends Error {
+  /**
+   * Creates the validation error.
+   */
+  public constructor(message: string) {
+    super(message);
+    this.name = "ApplyForLotteryValidationError";
+  }
+}
+
+/**
  * Per-attempt result entry.
  */
 export interface ApplicationResultEntry {
@@ -26,6 +49,27 @@ export interface ApplicationResultEntry {
   readonly stockId: string;
   readonly result: ApplicationResult["status"];
   readonly reason: string | null;
+  readonly failureCategory: ApplicationFailureCategory | null;
+}
+
+/**
+ * Per-account execution summary.
+ */
+export interface AccountApplicationSummary {
+  readonly accountId: string;
+  readonly appliedCount: number;
+  readonly skippedCount: number;
+  readonly failedCount: number;
+}
+
+/**
+ * Per-stock execution summary.
+ */
+export interface StockApplicationSummary {
+  readonly stockId: string;
+  readonly appliedCount: number;
+  readonly skippedCount: number;
+  readonly failedCount: number;
 }
 
 /**
@@ -36,7 +80,52 @@ export interface ApplyForLotteryOutput {
   readonly skippedCount: number;
   readonly failedCount: number;
   readonly results: readonly ApplicationResultEntry[];
+  readonly accountSummaries: readonly AccountApplicationSummary[];
+  readonly stockSummaries: readonly StockApplicationSummary[];
 }
+
+type FailedBrokerResult = Extract<
+  ApplicationResult,
+  { readonly status: "failure" | "insufficient_balance" }
+>;
+
+interface MutableSummary {
+  appliedCount: number;
+  skippedCount: number;
+  failedCount: number;
+}
+
+type AttemptOutcome = "applied" | "skipped" | "failed";
+
+const OPERATION_LOG_MESSAGES = {
+  success: (companyName: string): string =>
+    `${companyName} のIPO抽選に申し込みました`,
+  alreadyApplied: (companyName: string): string =>
+    `${companyName} は申込済みのためスキップしました`,
+  insufficientBalance: (companyName: string): string =>
+    `${companyName} は買付余力不足のため申込できませんでした`,
+  imageAuthentication: (companyName: string): string =>
+    `${companyName} の画像認証に失敗しました`,
+  mailRetrieval: (companyName: string): string =>
+    `${companyName} の認証メール取得に失敗しました`,
+  applicationFailure: (companyName: string): string =>
+    `${companyName} のIPO抽選申し込みに失敗しました`,
+  unexpectedFailure: (companyName: string): string =>
+    `${companyName} のIPO抽選処理中に予期しないエラーが発生しました`,
+} as const;
+
+const OPERATION_LOG_ERROR_MESSAGES = {
+  insufficientBalance: "insufficient balance",
+  mailRetrieval: "mail retrieval failed",
+  imageAuthentication: "image authentication failed",
+  loginFailed: "login failed",
+  twoFactorPageNotReached: "2FA page not reached",
+  selectorMissing: "selector missing",
+  unexpectedPageTransition: "unexpected page transition",
+  secretAccessFailed: "secret access failed",
+  applicationFailure: "application failed",
+  unexpectedWorkflowFailure: "unexpected workflow failure",
+} as const;
 
 /**
  * Repository for active broker accounts.
@@ -174,16 +263,15 @@ export class ApplyForLotteryUseCase {
 
     const accounts = await this.accountRepository.findActive();
     if (accounts.length === 0) {
+      const occurredAt = this.nowProvider.now().toISOString();
       await this.eventPublisher.publish({
         eventType: "OperationErrorOccurred",
         aggregateId: generateUlid(),
         aggregateType: "OperationLog",
-        payload: {
-          service_name: "ipo-browser",
-          operation_type: "apply_lottery",
-          error_message: "No active securities account found",
-          occurred_at: this.nowProvider.now().toISOString(),
-        },
+        payload: buildOperationErrorPayload(
+          "No active securities account found",
+          occurredAt,
+        ),
       });
 
       return {
@@ -191,6 +279,31 @@ export class ApplyForLotteryUseCase {
         skippedCount: 0,
         failedCount: 0,
         results: [],
+        accountSummaries: [],
+        stockSummaries: [],
+      };
+    }
+
+    const executableAccounts = accounts.filter(hasUsableImapCredential);
+    if (executableAccounts.length === 0) {
+      const occurredAt = this.nowProvider.now().toISOString();
+      await this.eventPublisher.publish({
+        eventType: "OperationErrorOccurred",
+        aggregateId: generateUlid(),
+        aggregateType: "OperationLog",
+        payload: buildOperationErrorPayload(
+          "No active securities account with IMAP credential found",
+          occurredAt,
+        ),
+      });
+
+      return {
+        appliedCount: 0,
+        skippedCount: 0,
+        failedCount: 0,
+        results: [],
+        accountSummaries: [],
+        stockSummaries: [],
       };
     }
 
@@ -200,131 +313,570 @@ export class ApplyForLotteryUseCase {
     ]);
 
     const results: ApplicationResultEntry[] = [];
-    let appliedCount = 0;
-    let skippedCount = 0;
-    let failedCount = 0;
+    const globalSummary = createMutableSummary();
+    const accountSummaries = new Map<string, MutableSummary>(
+      executableAccounts.map((account) => [account.identifier, createMutableSummary()]),
+    );
+    const stockSummaries = new Map<string, MutableSummary>(
+      stocks.map((stock) => [stock.identifier, createMutableSummary()]),
+    );
 
-    for (const account of accounts) {
+    for (const account of executableAccounts) {
       for (const stock of stocks) {
-        const alreadyApplied =
-          await this.applicationRepository.existsByStockAndAccount(
-            stock.identifier,
-            account.identifier,
-          );
+        try {
+          const alreadyApplied =
+            await this.applicationRepository.existsByStockAndAccount(
+              stock.identifier,
+              account.identifier,
+            );
 
-        if (!isEligible(stock, exclusions, alreadyApplied)) {
-          skippedCount += 1;
-          results.push({
-            accountId: account.identifier,
-            stockId: stock.identifier,
-            result: "already_applied",
-            reason: alreadyApplied ? "already applied" : "excluded",
-          });
-          continue;
-        }
+          if (!isEligible(stock, exclusions, alreadyApplied)) {
+            recordAttemptResult(
+              globalSummary,
+              accountSummaries,
+              stockSummaries,
+              {
+                accountId: account.identifier,
+                stockId: stock.identifier,
+                result: "already_applied",
+                reason: alreadyApplied ? "already applied" : "excluded",
+                failureCategory: null,
+              },
+              results,
+            );
+            continue;
+          }
 
-        const brokerResult = await this.brokerPort.applyForIpo(account, stock);
-        const executedAt = this.nowProvider.now().toISOString();
+          const brokerResult = await this.brokerPort.applyForIpo(account, stock);
+          const executedAt = captureExecutedAt(this.nowProvider);
 
-        if (brokerResult.status === "success") {
-          const applicationId = generateUlid();
-          await this.applicationRepository.save({
-            identifier: applicationId,
-            stock: stock.identifier,
-            securitiesAccount: account.identifier,
-            appliedOrder: {
-              shares: stock.shares,
-              price: stock.price,
-              orderedAt: executedAt,
-            },
-            lotteryOutcome: null,
-            status: "Applied",
-            createdAt: executedAt,
-            updatedAt: executedAt,
-          });
-          await this.operationLogRepository.save({
-            identifier: generateUlid(),
-            application: applicationId,
-            eventType: "ApplyLottery",
-            serviceName: "ipo-browser",
-            status: "Success",
-            message: `${stock.companyName} のIPO抽選に申し込みました`,
-            errorMessage: null,
-            executedAt,
-          });
-          await this.eventPublisher.publish({
-            eventType: "ApplicationCompleted",
-            aggregateId: applicationId,
-            aggregateType: "LotteryApplication",
-            payload: {
+          if (brokerResult.status === "success") {
+            const applicationId = generateUlid();
+            await this.applicationRepository.save({
               identifier: applicationId,
               stock: stock.identifier,
-              securities_account: account.identifier,
-              applied_shares: stock.shares,
-              applied_price: stock.price,
-              applied_at: executedAt,
+              securitiesAccount: account.identifier,
+              appliedOrder: {
+                shares: stock.shares,
+                price: stock.price,
+                orderedAt: executedAt,
+              },
+              lotteryOutcome: null,
+              status: "Applied",
+              createdAt: executedAt,
+              updatedAt: executedAt,
+            });
+            await this.operationLogRepository.save({
+              ...buildSuccessfulOperationLog(applicationId, stock, executedAt),
+            });
+            await this.eventPublisher.publish({
+              eventType: "ApplicationCompleted",
+              aggregateId: applicationId,
+              aggregateType: "LotteryApplication",
+              payload: buildApplicationCompletedPayload(
+                applicationId,
+                account,
+                stock,
+                executedAt,
+              ),
+            });
+            recordAttemptResult(
+              globalSummary,
+              accountSummaries,
+              stockSummaries,
+              {
+                accountId: account.identifier,
+                stockId: stock.identifier,
+                result: "success",
+                reason: null,
+                failureCategory: null,
+              },
+              results,
+            );
+            continue;
+          }
+
+          if (brokerResult.status === "already_applied") {
+            await this.operationLogRepository.save({
+              ...buildAlreadyAppliedOperationLog(stock, executedAt),
+            });
+            recordAttemptResult(
+              globalSummary,
+              accountSummaries,
+              stockSummaries,
+              {
+                accountId: account.identifier,
+                stockId: stock.identifier,
+                result: brokerResult.status,
+                reason: "already applied",
+                failureCategory: null,
+              },
+              results,
+            );
+            continue;
+          }
+
+          await this.operationLogRepository.save({
+            ...buildFailureOperationLog(stock, brokerResult, executedAt),
+          });
+          const failureEvent = buildFailureNotificationEvent(
+            account,
+            stock,
+            brokerResult,
+            executedAt,
+          );
+          await this.eventPublisher.publish(failureEvent);
+          recordAttemptResult(
+            globalSummary,
+            accountSummaries,
+            stockSummaries,
+            {
+              accountId: account.identifier,
+              stockId: stock.identifier,
+              result: brokerResult.status,
+              reason: extractFailureReason(brokerResult),
+              failureCategory:
+                brokerResult.status === "failure"
+                  ? brokerResult.category
+                  : null,
             },
-          });
-          appliedCount += 1;
-          results.push({
-            accountId: account.identifier,
-            stockId: stock.identifier,
-            result: "success",
-            reason: null,
-          });
-          continue;
+            results,
+          );
+        } catch (error) {
+          const executedAt = captureExecutedAt(this.nowProvider);
+          const reason = extractUnexpectedFailureReason(error);
+          await saveOperationLogSafely(
+            this.operationLogRepository,
+            buildUnexpectedFailureOperationLog(stock, reason, executedAt),
+          );
+          recordAttemptResult(
+            globalSummary,
+            accountSummaries,
+            stockSummaries,
+            {
+              accountId: account.identifier,
+              stockId: stock.identifier,
+              result: "failure",
+              reason,
+              failureCategory: "application",
+            },
+            results,
+          );
         }
-
-        const reason =
-          brokerResult.status === "failure"
-            ? brokerResult.reason
-            : brokerResult.status === "insufficient_balance"
-              ? "insufficient balance"
-              : "already applied";
-
-        if (brokerResult.status === "already_applied") {
-          skippedCount += 1;
-        } else {
-          failedCount += 1;
-        }
-
-        await this.operationLogRepository.save({
-          identifier: generateUlid(),
-          application: null,
-          eventType: "ApplyLottery",
-          serviceName: "ipo-browser",
-          status: "Failure",
-          message: `${stock.companyName} のIPO抽選申し込みに失敗しました`,
-          errorMessage: reason,
-          executedAt,
-        });
-        await this.eventPublisher.publish({
-          eventType: "ApplicationFailed",
-          aggregateId: stock.identifier,
-          aggregateType: "IpoStock",
-          payload: {
-            identifier: generateUlid(),
-            stock: stock.identifier,
-            securities_account: account.identifier,
-            error_message: reason,
-            failed_at: executedAt,
-          },
-        });
-        results.push({
-          accountId: account.identifier,
-          stockId: stock.identifier,
-          result: brokerResult.status,
-          reason,
-        });
       }
     }
 
     return {
-      appliedCount,
-      skippedCount,
-      failedCount,
+      appliedCount: globalSummary.appliedCount,
+      skippedCount: globalSummary.skippedCount,
+      failedCount: globalSummary.failedCount,
       results,
+      accountSummaries: buildAccountSummaries(accountSummaries),
+      stockSummaries: buildStockSummaries(stockSummaries),
     };
+  }
+}
+
+/**
+ * Builds the payload for an operation-level error event.
+ */
+function buildOperationErrorPayload(
+  errorMessage: string,
+  occurredAt: string,
+): OperationErrorOccurredPayload {
+  return {
+    service_name: "ipo-browser",
+    operation_type: "apply_lottery",
+    error_message: errorMessage,
+    occurred_at: occurredAt,
+  };
+}
+
+/**
+ * Captures the unified execution timestamp at the point where the broker result
+ * has been determined and the workflow is about to persist/publish outcomes.
+ */
+function captureExecutedAt(nowProvider: NowProvider): string {
+  return nowProvider.now().toISOString();
+}
+
+/**
+ * Builds an operation log entry for successful applications.
+ */
+function buildSuccessfulOperationLog(
+  applicationId: string,
+  stock: TargetIpoStock,
+  executedAt: string,
+): OperationLogEntry {
+  return {
+    identifier: generateUlid(),
+    application: applicationId,
+    eventType: OPERATION_LOG_EVENT_TYPES.APPLY_LOTTERY,
+    serviceName: "ipo-browser",
+    status: "Success",
+    message: OPERATION_LOG_MESSAGES.success(stock.companyName),
+    errorMessage: null,
+    executedAt,
+  };
+}
+
+/**
+ * Builds a success payload for completed applications.
+ */
+function buildApplicationCompletedPayload(
+  applicationId: string,
+  account: ActiveSecuritiesAccount,
+  stock: TargetIpoStock,
+  executedAt: string,
+): ApplicationCompletedPayload {
+  return {
+    identifier: applicationId,
+    stock: stock.identifier,
+    securities_account: account.identifier,
+    applied_shares: stock.shares,
+    applied_price: stock.price,
+    applied_at: executedAt,
+  };
+}
+
+/**
+ * Builds an operation log entry for already-applied skips.
+ *
+ * Skips are recorded as `Success` because the workflow intentionally decided
+ * not to apply and completed without an execution error.
+ */
+function buildAlreadyAppliedOperationLog(
+  stock: TargetIpoStock,
+  executedAt: string,
+): OperationLogEntry {
+  return {
+    identifier: generateUlid(),
+    application: null,
+    eventType: OPERATION_LOG_EVENT_TYPES.APPLY_LOTTERY,
+    serviceName: "ipo-browser",
+    status: "Success",
+    message: OPERATION_LOG_MESSAGES.alreadyApplied(stock.companyName),
+    errorMessage: null,
+    executedAt,
+  };
+}
+
+/**
+ * Builds an operation log entry for failed application attempts.
+ */
+function buildFailureOperationLog(
+  stock: TargetIpoStock,
+  brokerResult: FailedBrokerResult,
+  executedAt: string,
+): OperationLogEntry {
+  return {
+    identifier: generateUlid(),
+    application: null,
+    eventType: OPERATION_LOG_EVENT_TYPES.APPLY_LOTTERY,
+    serviceName: "ipo-browser",
+    status: "Failure",
+    message: buildFailureOperationMessage(stock.companyName, brokerResult),
+    errorMessage: buildFailureOperationErrorMessage(brokerResult),
+    executedAt,
+  };
+}
+
+/**
+ * Builds the correct notification event for a failed application attempt.
+ */
+function buildFailureNotificationEvent(
+  account: ActiveSecuritiesAccount,
+  stock: TargetIpoStock,
+  brokerResult: FailedBrokerResult,
+  executedAt: string,
+): NotificationEventEnvelope {
+  const identifier = generateUlid();
+  if (
+    brokerResult.status === "failure" &&
+    (brokerResult.category === "image_authentication" ||
+      brokerResult.category === "mail_retrieval")
+  ) {
+    const payload: ImageAuthenticationFailedPayload = {
+      securities_account: account.identifier,
+      failure_reason: buildExternalFailureMessage(brokerResult),
+      attempt_count: 1,
+      occurred_at: executedAt,
+    };
+
+    return {
+      eventType: "ImageAuthenticationFailed",
+      aggregateId: account.identifier,
+      aggregateType: "SecuritiesAccount",
+      payload,
+    };
+  }
+
+  const payload: ApplicationFailedPayload = {
+    identifier,
+    stock: stock.identifier,
+    securities_account: account.identifier,
+    error_message: buildExternalFailureMessage(brokerResult),
+    failed_at: executedAt,
+  };
+
+  return {
+    eventType: "ApplicationFailed",
+    aggregateId: stock.identifier,
+    aggregateType: "IpoStock",
+    payload,
+  };
+}
+
+/**
+ * Returns the user-facing reason for a failed broker result.
+ */
+function extractFailureReason(
+  brokerResult: FailedBrokerResult,
+): string {
+  return brokerResult.status === "failure"
+    ? brokerResult.reason
+    : "insufficient balance";
+}
+
+/**
+ * Builds an operation log message that matches the failure category.
+ */
+function buildFailureOperationMessage(
+  companyName: string,
+  brokerResult: FailedBrokerResult,
+): string {
+  if (brokerResult.status === "insufficient_balance") {
+    return OPERATION_LOG_MESSAGES.insufficientBalance(companyName);
+  }
+
+  if (brokerResult.category === "mail_retrieval") {
+    return OPERATION_LOG_MESSAGES.mailRetrieval(companyName);
+  }
+
+  if (brokerResult.category === "image_authentication") {
+    return OPERATION_LOG_MESSAGES.imageAuthentication(companyName);
+  }
+
+  return OPERATION_LOG_MESSAGES.applicationFailure(companyName);
+}
+
+/**
+ * Builds the external notification message for failed attempts.
+ */
+function buildExternalFailureMessage(
+  brokerResult: FailedBrokerResult,
+): string {
+  if (brokerResult.status === "insufficient_balance") {
+    return "買付余力が不足しているため、申し込みできませんでした";
+  }
+
+  if (brokerResult.category === "mail_retrieval") {
+    return "認証メールを取得できなかったため、画像認証に失敗しました";
+  }
+
+  if (brokerResult.category === "image_authentication") {
+    return "画像認証に失敗しました";
+  }
+
+  return "IPO抽選の申し込みに失敗しました";
+}
+
+/**
+ * Builds a sanitized internal error message for operation logs.
+ */
+function buildFailureOperationErrorMessage(
+  brokerResult: FailedBrokerResult,
+): string {
+  if (brokerResult.status === "insufficient_balance") {
+    return OPERATION_LOG_ERROR_MESSAGES.insufficientBalance;
+  }
+
+  if (brokerResult.category === "mail_retrieval") {
+    return OPERATION_LOG_ERROR_MESSAGES.mailRetrieval;
+  }
+
+  if (brokerResult.category === "image_authentication") {
+    return OPERATION_LOG_ERROR_MESSAGES.imageAuthentication;
+  }
+
+  return sanitizeApplicationFailureReason(brokerResult.reason);
+}
+
+/**
+ * Creates a mutable summary used for global, account, and stock counters.
+ */
+function createMutableSummary(): MutableSummary {
+  return {
+    appliedCount: 0,
+    skippedCount: 0,
+    failedCount: 0,
+  };
+}
+
+/**
+ * Records one attempt result and updates all counters from the same rules.
+ */
+function recordAttemptResult(
+  globalSummary: MutableSummary,
+  accountSummaries: ReadonlyMap<string, MutableSummary>,
+  stockSummaries: ReadonlyMap<string, MutableSummary>,
+  result: ApplicationResultEntry,
+  results: ApplicationResultEntry[],
+): void {
+  const outcome = classifyAttemptOutcome(result);
+  incrementSummary(globalSummary, outcome);
+  incrementSummary(accountSummaries.get(result.accountId), outcome);
+  incrementSummary(stockSummaries.get(result.stockId), outcome);
+  results.push(result);
+}
+
+/**
+ * Classifies one result entry into the fixed count buckets.
+ *
+ * `already_applied` is treated as a skip, not a failure. The workflow completed
+ * successfully and intentionally took no broker action for that pair.
+ */
+function classifyAttemptOutcome(
+  result: ApplicationResultEntry,
+): AttemptOutcome {
+  if (result.result === "success") {
+    return "applied";
+  }
+
+  if (result.result === "already_applied") {
+    return "skipped";
+  }
+
+  return "failed";
+}
+
+/**
+ * Increments the summary for the given outcome.
+ */
+function incrementSummary(
+  summary: MutableSummary | undefined,
+  outcome: AttemptOutcome,
+): void {
+  if (summary === undefined) {
+    return;
+  }
+
+  if (outcome === "applied") {
+    summary.appliedCount += 1;
+    return;
+  }
+
+  if (outcome === "skipped") {
+    summary.skippedCount += 1;
+    return;
+  }
+
+  summary.failedCount += 1;
+}
+
+/**
+ * Builds immutable per-account summaries from the mutable map.
+ */
+function buildAccountSummaries(
+  summaries: ReadonlyMap<string, MutableSummary>,
+): readonly AccountApplicationSummary[] {
+  return [...summaries.entries()].map(([accountId, summary]) => ({
+    accountId,
+    appliedCount: summary.appliedCount,
+    skippedCount: summary.skippedCount,
+    failedCount: summary.failedCount,
+  }));
+}
+
+/**
+ * Builds immutable per-stock summaries from the mutable map.
+ */
+function buildStockSummaries(
+  summaries: ReadonlyMap<string, MutableSummary>,
+): readonly StockApplicationSummary[] {
+  return [...summaries.entries()].map(([stockId, summary]) => ({
+    stockId,
+    appliedCount: summary.appliedCount,
+    skippedCount: summary.skippedCount,
+    failedCount: summary.failedCount,
+  }));
+}
+
+/**
+ * Returns a safe reason string for unexpected workflow failures.
+ */
+function extractUnexpectedFailureReason(error: unknown): string {
+  return error instanceof Error ? error.message : "unexpected workflow failure";
+}
+
+/**
+ * Reduces raw application errors into safe operation-log messages.
+ */
+function sanitizeApplicationFailureReason(reason: string): string {
+  const normalizedReason = reason.trim().toLowerCase();
+
+  if (
+    normalizedReason.includes("invalid login") ||
+    normalizedReason.includes("login failed")
+  ) {
+    return OPERATION_LOG_ERROR_MESSAGES.loginFailed;
+  }
+
+  if (normalizedReason.includes("2fa page not reached")) {
+    return OPERATION_LOG_ERROR_MESSAGES.twoFactorPageNotReached;
+  }
+
+  if (normalizedReason.includes("selector missing")) {
+    return OPERATION_LOG_ERROR_MESSAGES.selectorMissing;
+  }
+
+  if (normalizedReason.includes("unexpected page transition")) {
+    return OPERATION_LOG_ERROR_MESSAGES.unexpectedPageTransition;
+  }
+
+  if (
+    normalizedReason.includes("secret manager") ||
+    normalizedReason.includes("loginpassword=") ||
+    normalizedReason.includes("mailpassword=") ||
+    normalizedReason.includes("credential")
+  ) {
+    return OPERATION_LOG_ERROR_MESSAGES.secretAccessFailed;
+  }
+
+  return OPERATION_LOG_ERROR_MESSAGES.applicationFailure;
+}
+
+/**
+ * Builds an operation log entry for unexpected workflow failures.
+ */
+function buildUnexpectedFailureOperationLog(
+  stock: TargetIpoStock,
+  reason: string,
+  executedAt: string,
+): OperationLogEntry {
+  return {
+    identifier: generateUlid(),
+    application: null,
+    eventType: OPERATION_LOG_EVENT_TYPES.APPLY_LOTTERY,
+    serviceName: "ipo-browser",
+    status: "Failure",
+    message: OPERATION_LOG_MESSAGES.unexpectedFailure(stock.companyName),
+    errorMessage: sanitizeApplicationFailureReason(reason),
+    executedAt,
+  };
+}
+
+/**
+ * Saves an operation log entry without aborting the whole batch when logging fails.
+ */
+async function saveOperationLogSafely(
+  repository: OperationLogRepository,
+  entry: OperationLogEntry,
+): Promise<void> {
+  try {
+    await repository.save(entry);
+  } catch {
+    // Keep the batch running even when operation log persistence fails.
   }
 }
 
@@ -352,9 +904,22 @@ function assertTargetDateIsNotFuture(targetDate: string, now: Date): void {
   const target = new Date(`${targetDate}T00:00:00.000Z`);
   const today = new Date(now.toISOString().slice(0, 10) + "T00:00:00.000Z");
   if (Number.isNaN(target.getTime())) {
-    throw new Error("targetDate must be a valid ISO date");
+    throw new ApplyForLotteryValidationError("targetDate must be a valid ISO date");
   }
   if (target.getTime() > today.getTime()) {
-    throw new Error("targetDate must not be in the future");
+    throw new ApplyForLotteryValidationError("targetDate must not be in the future");
   }
+}
+
+/**
+ * Returns whether the account has enough IMAP credential data to fetch authentication mails.
+ */
+function hasUsableImapCredential(account: ActiveSecuritiesAccount): boolean {
+  const mailCredential = account.credential.mailCredential;
+  return (
+    mailCredential.mailAddress.trim() !== "" &&
+    mailCredential.mailPassword.trim() !== "" &&
+    mailCredential.imapHost.trim() !== "" &&
+    mailCredential.imapPort > 0
+  );
 }

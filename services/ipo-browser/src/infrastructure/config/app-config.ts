@@ -6,6 +6,7 @@ export interface AppConfig {
   readonly gcpProjectId: string;
   readonly notificationTopic: string;
   readonly browserSessionBaseDir: string;
+  readonly browserSessionRetentionHours: number;
   readonly mockServerUrl: string | null;
   readonly rakutenLoginPageUrl: string | null;
   readonly rakutenIpoListPageUrl: string | null;
@@ -13,7 +14,6 @@ export interface AppConfig {
   readonly rakutenImageAuthenticationKeywords:
     | readonly [string, string]
     | null;
-  readonly rakutenDryRun: boolean;
   readonly mockLotteryResult: "Won" | "Lost" | "Alternate" | null;
   readonly stockCatalogUrl: string | null;
 }
@@ -39,6 +39,10 @@ export function readAppConfig(
     browserSessionBaseDir:
       normalizeOptionalString(env["BROWSER_SESSION_BASE_DIR"]) ??
       "/tmp/browser-sessions",
+    browserSessionRetentionHours: parseInteger(
+      env["BROWSER_SESSION_RETENTION_HOURS"],
+      24,
+    ),
     mockServerUrl,
     rakutenLoginPageUrl:
       normalizeOptionalString(env["RAKUTEN_LOGIN_PAGE_URL"]) ??
@@ -55,7 +59,6 @@ export function readAppConfig(
       env["RAKUTEN_IMAGE_AUTHENTICATION_KEYWORDS"],
       mockServerUrl === null ? null : "さくら,みかん",
     ),
-    rakutenDryRun: env["RAKUTEN_DRY_RUN"] === "true" || mockServerUrl !== null,
     mockLotteryResult: parseLotteryResult(env["RAKUTEN_MOCK_LOTTERY_RESULT"]),
     stockCatalogUrl:
       normalizeOptionalString(env["IPO_STOCK_CATALOG_URL"]) ??

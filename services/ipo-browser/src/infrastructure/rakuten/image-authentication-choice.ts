@@ -26,7 +26,7 @@ export function buildImageAuthenticationChoice(
 ): ImageAuthenticationChoice {
   const labels = collectLabels(attributes);
   return {
-    buttonId: attributes.buttonId,
+    buttonId: normalizeButtonId(attributes.buttonId),
     buttonIndex: attributes.buttonIndex,
     labels,
   };
@@ -125,4 +125,15 @@ function collectLabels(
     labels.push(trimmed);
   }
   return labels;
+}
+
+/**
+ * Normalizes an optional button id.
+ */
+function normalizeButtonId(buttonId: string | null): string | null {
+  if (buttonId === null) {
+    return null;
+  }
+  const trimmed = buttonId.trim();
+  return trimmed === "" ? null : trimmed;
 }

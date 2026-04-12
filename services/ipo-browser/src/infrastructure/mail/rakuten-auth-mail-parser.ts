@@ -30,6 +30,19 @@ export class MailRetrievalTimeoutError extends Error {
 }
 
 /**
+ * Error raised when the Rakuten authentication mail source cannot be queried.
+ */
+export class RakutenAuthMailSourceError extends Error {
+  /**
+   * Creates the mail source error.
+   */
+  public constructor(message: string) {
+    super(message);
+    this.name = "RakutenAuthMailSourceError";
+  }
+}
+
+/**
  * Mail source used to retrieve Rakuten authentication mails.
  */
 export interface RakutenAuthMailSource {

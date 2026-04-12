@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>BB参加 / 確認</title></head>
+<body data-page="ipo-confirm">
+  <input type="hidden" id="ratPageName" value="[member]/app/ipo_jp_join_confirm.do" />
+  <h1>IPO申し込み確認</h1>
+  <input type="password" id="passwordInputText" value="1234" />
+  <form id="confirm-form">
+    <button type="submit" id="submit-button">申し込む</button>
+  </form>
+  <script>
+    const form = document.getElementById("confirm-form");
+    form?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const url = new URL(window.location.href);
+      const scenario = url.searchParams.get("scenario") ?? "success";
+      if (scenario === "already_applied") {
+        window.location.href = "./ipo_application_already_applied.html";
+        return;
+      }
+      if (scenario === "insufficient_balance") {
+        window.location.href = "./ipo_application_insufficient.html";
+        return;
+      }
+      if (scenario === "failure") {
+        window.location.href = "./ipo_application_failure.html";
+        return;
+      }
+      window.location.href = "./ipo_application_success.html";
+    });
+  </script>
+</body>
+</html>

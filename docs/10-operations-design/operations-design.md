@@ -3,7 +3,7 @@ title: "運用設計書"
 version: "1.0.0"
 status: "draft"
 created: "2026-03-26"
-last_updated: "2026-03-26"
+last_updated: "2026-04-13"
 author: "lihs"
 ---
 
@@ -50,6 +50,30 @@ author: "lihs"
 | Firestoreバックアップ | 週次（日曜深夜） | GitHub Actions | スケジュール実行 |
 | 依存パッケージの脆弱性チェック | 週次 | GitHub Dependabot | 自動PR作成 |
 | セッション永続化のクリーンアップ | 日次 | ipo-browser | ジョブ実行時に24時間超過分を削除 |
+
+### 2.1.1 ローカル参照 HTML の運用
+
+- `docs/reference/` 配下の HTML はローカル調査用アーティファクトとして扱う
+- 実画面の HTML dump やスクリーンショットは Git にコミットしない
+- contract test に必要な最小構成だけを `services/ipo-browser/tests/fixtures/` に匿名化して配置する
+- `docs/reference/` は `.gitignore` に含め、PR に混入させない
+
+### 2.1.2 ブラウザセッション保持方針
+
+- `ipo-browser` の Playwright persistent context は `BROWSER_SESSION_BASE_DIR` 配下に保存する
+- retention は `BROWSER_SESSION_RETENTION_HOURS` で制御し、デフォルトは 24 時間とする
+- サービス起動時に retention 超過分を削除する
+
+### 2.1.3 DD-101 の smoke / feature test 方針
+
+- `ipo-browser` の smoke test は production 相当の env 名を使って起動し、`/health`、`/internal/stocks`、`/internal/accounts/test` を確認する
+- `ipo-browser` の feature test は `/internal/pubsub/apply` を実際に呼び、Express app、use case、Rakuten adapter、Page Object、fixture HTML を 1 本で通す
+- feature test では Secret / Firestore / PubSub を次の in-process concrete で代替する
+  - Secret: inline credential / static keyword provider
+  - Firestore: in-memory repository
+  - PubSub: in-memory capture publisher
+- ブラウザ操作は mock せず、Playwright + ローカル fixture HTTP server を使う
+- `ipo-api` との接続確認は Rust 側 consumer integration test で行い、`ApplicationCompleted`、`ApplicationFailed`、`ImageAuthenticationFailed` の payload 契約を固定する
 
 ### 2.2 人間が実施する定期作業
 

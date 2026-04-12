@@ -11,8 +11,16 @@ import {
   createFailedApplicationResult,
 } from "../../domain/application-result.js";
 import type { TargetIpoStock } from "../../domain/ipo-stock.js";
+import {
+  MailRetrievalTimeoutError,
+  RakutenAuthMailParseError,
+  RakutenAuthMailSourceError,
+} from "../mail/rakuten-auth-mail-parser.js";
 import { BrowserSessionStorage } from "../session/browser-session-storage.js";
 import type { PageFactoryPort, RakutenSession } from "./page-factory.js";
+import type {
+  RakutenNavigationTargetResolver,
+} from "./rakuten-navigation-target-resolver.js";
 
 /**
  * Keyword pair required for image authentication.
@@ -66,12 +74,42 @@ export class StaticImageAuthenticationKeywordProvider
  * Runtime config for the Rakuten adapter.
  */
 export interface RakutenBrokerConfig {
-  readonly dryRun: boolean;
-  readonly loginPageUrl: string | null;
-  readonly ipoListPageUrl: string | null;
-  readonly applicationPageUrl: string | null;
   readonly mockLotteryResult: LotteryResult;
 }
+
+class ImageAuthenticationError extends Error {
+  /**
+   * Creates the image authentication error.
+   */
+  public constructor(message: string) {
+    super(message);
+    this.name = "ImageAuthenticationError";
+  }
+}
+
+class MailAuthenticationRetrievalError extends Error {
+  /**
+   * Creates the mail retrieval error used during image authentication.
+   */
+  public constructor(message: string) {
+    super(message);
+    this.name = "MailAuthenticationRetrievalError";
+  }
+}
+
+const IMAGE_AUTHENTICATION_MAX_ATTEMPTS = 2;
+
+/**
+ * Retry policy for Rakuten browser automation.
+ *
+ * - image authentication code expiry: retry once after resending the code
+ * - mail retrieval timeout/source errors: do not retry
+ * - selector missing and page transition errors: do not retry
+ * - temporary broker-side errors: do not retry until a stable transient marker is identified
+ */
+const RAKUTEN_RETRY_POLICY = {
+  imageAuthenticationMaxAttempts: IMAGE_AUTHENTICATION_MAX_ATTEMPTS,
+} as const;
 
 /**
  * Playwright-backed Rakuten adapter used by ipo-browser.
@@ -84,6 +122,7 @@ export class RakutenBrokerAdapter {
     private readonly pageFactory: PageFactoryPort,
     private readonly sessionStorage: BrowserSessionStorage,
     private readonly keywordProvider: ImageAuthenticationKeywordProvider,
+    private readonly navigationTargetResolver: RakutenNavigationTargetResolver,
     private readonly config: RakutenBrokerConfig,
   ) {}
 
@@ -144,11 +183,10 @@ export class RakutenBrokerAdapter {
       );
       await applicationPage.clickConfirm();
       await applicationPage.clickSubmit();
-      return applicationPage.readApplicationResult();
+      const result = await applicationPage.readApplicationResult();
+      return result;
     } catch (error) {
-      return createFailedApplicationResult(
-        error instanceof Error ? error.message : "browser automation failed",
-      );
+      return mapRakutenAutomationError(error);
     } finally {
       await session?.close();
     }
@@ -176,12 +214,8 @@ export class RakutenBrokerAdapter {
     session: RakutenSession,
     credential: AccountCredential,
   ): Promise<void> {
-    if (this.config.loginPageUrl === null) {
-      throw new Error("RAKUTEN_LOGIN_PAGE_URL is not configured");
-    }
-
     const loginPage = session.loginPage();
-    await loginPage.navigate(this.config.loginPageUrl);
+    await loginPage.navigate(this.navigationTargetResolver.resolveLoginPageUrl());
     if (await loginPage.isLoginSuccessful()) {
       return;
     }
@@ -215,11 +249,24 @@ export class RakutenBrokerAdapter {
     imageAuthenticationPage: ReturnType<RakutenSession["imageAuthenticationPage"]>,
     credential: AccountCredential,
   ): Promise<void> {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const keywords = await this.keywordProvider.fetchKeywords(credential);
-      await imageAuthenticationPage.clickImageByAltText(keywords.firstKeyword);
-      await imageAuthenticationPage.clickImageByAltText(keywords.secondKeyword);
-      await imageAuthenticationPage.submitSelection();
+    for (
+      let attempt = 0;
+      attempt < RAKUTEN_RETRY_POLICY.imageAuthenticationMaxAttempts;
+      attempt += 1
+    ) {
+      const keywords =
+        await this.fetchImageAuthenticationKeywords(credential);
+      try {
+        await imageAuthenticationPage.clickImageByAltText(keywords.firstKeyword);
+        await imageAuthenticationPage.clickImageByAltText(keywords.secondKeyword);
+        await imageAuthenticationPage.submitSelection();
+      } catch (error) {
+        throw new ImageAuthenticationError(
+          error instanceof Error
+            ? error.message
+            : "image authentication failed",
+        );
+      }
 
       if (await imageAuthenticationPage.isAuthenticationSuccessful()) {
         return;
@@ -229,14 +276,43 @@ export class RakutenBrokerAdapter {
         attempt === 0 &&
         (await imageAuthenticationPage.requiresCodeResend())
       ) {
-        await imageAuthenticationPage.resendCode();
+        try {
+          await imageAuthenticationPage.resendCode();
+        } catch (error) {
+          throw new ImageAuthenticationError(
+            error instanceof Error
+              ? error.message
+              : "image authentication resend failed",
+          );
+        }
         continue;
       }
 
-      throw new Error(
+      throw new ImageAuthenticationError(
         (await imageAuthenticationPage.getErrorMessage()) ??
           "image authentication failed",
       );
+    }
+  }
+
+  /**
+   * Fetches image authentication keywords and classifies mail failures.
+   */
+  private async fetchImageAuthenticationKeywords(
+    credential: AccountCredential,
+  ): Promise<ImageAuthenticationKeyword> {
+    try {
+      return await this.keywordProvider.fetchKeywords(credential);
+    } catch (error) {
+      if (
+        error instanceof MailRetrievalTimeoutError ||
+        error instanceof RakutenAuthMailParseError ||
+        error instanceof RakutenAuthMailSourceError
+      ) {
+        throw new MailAuthenticationRetrievalError(error.message);
+      }
+
+      throw error;
     }
   }
 
@@ -247,65 +323,40 @@ export class RakutenBrokerAdapter {
     session: RakutenSession,
     stock: TargetIpoStock,
   ): Promise<void> {
-    if (this.config.ipoListPageUrl !== null) {
+    if (this.navigationTargetResolver.hasIpoListPageTarget()) {
       const ipoListPage = session.ipoListPage();
-      await ipoListPage.navigate(buildIpoListPageUrl(this.config.ipoListPageUrl, stock));
+      await ipoListPage.navigate(
+        this.navigationTargetResolver.resolveIpoListPageUrl(stock),
+      );
       await ipoListPage.openApplicationForCompany(stock.companyName);
       return;
     }
 
     const applicationPage = session.ipoApplicationPage();
-    const applicationPageUrl = buildApplicationPageUrl(
-      this.config.applicationPageUrl,
-      stock,
+    await applicationPage.navigate(
+      this.navigationTargetResolver.resolveApplicationPageUrl(stock),
     );
-    await applicationPage.navigate(applicationPageUrl);
   }
 }
 
 /**
- * Builds an application page URL and encodes the dry-run scenario.
+ * Maps broker automation errors to the shared application result.
+ *
+ * `application` covers browser-side failures that are not specific to mail
+ * retrieval or image authentication, including login failures, 2FA page
+ * transition failures, selector mismatches, and unexpected navigation.
  */
-function buildApplicationPageUrl(
-  baseUrl: string | null,
-  stock: TargetIpoStock,
-): string {
-  if (baseUrl === null) {
-    throw new Error("RAKUTEN_APPLICATION_PAGE_URL is not configured");
+function mapRakutenAutomationError(error: unknown): ApplicationResult {
+  const message =
+    error instanceof Error ? error.message : "browser automation failed";
+
+  if (error instanceof MailAuthenticationRetrievalError) {
+    return createFailedApplicationResult(message, "mail_retrieval");
   }
 
-  const url = new URL(baseUrl);
-  if (stock.companyName.includes("申込済")) {
-    url.searchParams.set("scenario", "already_applied");
-  } else if (stock.companyName.includes("残高不足")) {
-    url.searchParams.set("scenario", "insufficient_balance");
-  } else if (stock.companyName.includes("失敗")) {
-    url.searchParams.set("scenario", "failure");
-  } else {
-    url.searchParams.set("scenario", "success");
-  }
-  return url.toString();
-}
-
-/**
- * Builds an IPO list page URL and encodes mock-fixture hints.
- */
-function buildIpoListPageUrl(
-  baseUrl: string,
-  stock: TargetIpoStock,
-): string {
-  const url = new URL(baseUrl);
-  url.searchParams.set("companyName", stock.companyName);
-
-  if (stock.companyName.includes("申込済")) {
-    url.searchParams.set("scenario", "already_applied");
-  } else if (stock.companyName.includes("残高不足")) {
-    url.searchParams.set("scenario", "insufficient_balance");
-  } else if (stock.companyName.includes("失敗")) {
-    url.searchParams.set("scenario", "failure");
-  } else {
-    url.searchParams.set("scenario", "success");
+  if (error instanceof ImageAuthenticationError) {
+    return createFailedApplicationResult(message, "image_authentication");
   }
 
-  return url.toString();
+  return createFailedApplicationResult(message, "application");
 }

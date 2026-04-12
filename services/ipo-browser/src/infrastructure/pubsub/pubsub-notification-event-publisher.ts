@@ -8,7 +8,7 @@ interface PubSubEnvelope {
   readonly eventType: string;
   readonly aggregateId: string;
   readonly aggregateType: string;
-  readonly payload: Record<string, unknown>;
+  readonly payload: NotificationEventEnvelope["payload"];
   readonly metadata: {
     readonly timestamp: string;
     readonly version: number;

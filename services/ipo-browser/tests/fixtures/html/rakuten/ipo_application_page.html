@@ -2,44 +2,21 @@
 <html lang="ja">
 <head><meta charset="utf-8"><title>楽天証券 IPO申し込み</title></head>
 <body data-page="ipo-application">
+  <input type="hidden" id="ratPageName" value="[member]/app/ipo_jp_join_input.do" />
   <h1>IPO申し込み</h1>
   <form id="application-form">
     <input type="number" id="shares" placeholder="株数" />
     <input type="number" id="price" placeholder="価格" />
     <input type="password" id="trading-password" placeholder="取引暗証番号" />
     <button type="button" id="confirm-button">確認</button>
-    <button type="submit" id="submit-button">申し込む</button>
   </form>
   <p data-role="error-message" hidden></p>
   <script>
-    const form = document.getElementById("application-form");
     const errorMessage = document.querySelector("[data-role='error-message']");
     document.getElementById("confirm-button")?.addEventListener("click", () => {
-      document.body.dataset.confirmed = "true";
-    });
-    form?.addEventListener("submit", (event) => {
-      event.preventDefault();
       const url = new URL(window.location.href);
       const scenario = url.searchParams.get("scenario") ?? "success";
-      if (document.body.dataset.confirmed !== "true") {
-        errorMessage.hidden = false;
-        errorMessage.textContent = "確認ボタンを押してください";
-        return;
-      }
-      if (scenario === "already_applied") {
-        window.location.href = "./ipo_application_already_applied.html";
-        return;
-      }
-      if (scenario === "insufficient_balance") {
-        window.location.href = "./ipo_application_insufficient.html";
-        return;
-      }
-      if (scenario === "failure") {
-        errorMessage.hidden = false;
-        errorMessage.textContent = "申し込みに失敗しました";
-        return;
-      }
-      window.location.href = "./ipo_application_success.html";
+      window.location.href = `./ipo_application_confirm.html?scenario=${encodeURIComponent(scenario)}`;
     });
   </script>
 </body>

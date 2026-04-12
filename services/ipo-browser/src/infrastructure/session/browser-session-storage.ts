@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -24,5 +24,36 @@ export class BrowserSessionStorage {
     const directory = this.getUserDataDirectory(accountId);
     await mkdir(directory, { recursive: true });
     return directory;
+  }
+
+  /**
+   * Removes session directories older than the configured retention period.
+   */
+  public async cleanupExpiredSessions(
+    retentionHours: number,
+    nowProvider: { readonly now: () => Date } = { now: () => new Date() },
+  ): Promise<number> {
+    await mkdir(this.baseDirectory, { recursive: true });
+    const entries = await readdir(this.baseDirectory, { withFileTypes: true });
+    const cutoffTime =
+      nowProvider.now().getTime() - retentionHours * 60 * 60 * 1000;
+    let deletedCount = 0;
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      const directoryPath = path.join(this.baseDirectory, entry.name);
+      const details = await stat(directoryPath);
+      if (details.mtime.getTime() >= cutoffTime) {
+        continue;
+      }
+
+      await rm(directoryPath, { recursive: true, force: true });
+      deletedCount += 1;
+    }
+
+    return deletedCount;
   }
 }

@@ -24,6 +24,10 @@ import {
 } from "./mail/polling-image-authentication-keyword-provider.js";
 import { PubSubNotificationEventPublisher } from "./pubsub/pubsub-notification-event-publisher.js";
 import {
+  FixtureRakutenNavigationTargetResolver,
+  ProductionRakutenNavigationTargetResolver,
+} from "./rakuten/rakuten-navigation-target-resolver.js";
+import {
   RakutenBrokerAdapter,
   StaticImageAuthenticationKeywordProvider,
 } from "./rakuten/rakuten-broker-adapter.js";
@@ -110,27 +114,36 @@ export function createDependencyContainer(): DependencyContainer {
     config.notificationTopic,
   );
   const sessionStorage = new BrowserSessionStorage(config.browserSessionBaseDir);
+  void sessionStorage
+    .cleanupExpiredSessions(config.browserSessionRetentionHours)
+    .catch(() => undefined);
   const keywordProvider =
     config.rakutenImageAuthenticationKeywords !== null
       ? new StaticImageAuthenticationKeywordProvider(
           config.rakutenImageAuthenticationKeywords,
         )
       : new PollingImageAuthenticationKeywordProvider(
+          // DD-101 currently supports IMAP-based mail retrieval only.
           new ImapRakutenAuthMailSource(),
           {
             pollingIntervalMs: 3_000,
             timeoutMs: 120_000,
           },
         );
+  const navigationTargetResolver =
+    config.mockServerUrl === null
+      ? new ProductionRakutenNavigationTargetResolver(
+          config.rakutenLoginPageUrl,
+          config.rakutenIpoListPageUrl,
+          config.rakutenApplicationPageUrl,
+        )
+      : new FixtureRakutenNavigationTargetResolver(config.mockServerUrl);
   const broker = new RakutenBrokerAdapter(
     new PageFactory(),
     sessionStorage,
     keywordProvider,
+    navigationTargetResolver,
     {
-      dryRun: config.rakutenDryRun,
-      loginPageUrl: config.rakutenLoginPageUrl,
-      ipoListPageUrl: config.rakutenIpoListPageUrl,
-      applicationPageUrl: config.rakutenApplicationPageUrl,
       mockLotteryResult: config.mockLotteryResult,
     },
   );

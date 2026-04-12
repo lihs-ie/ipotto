@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AccountCredential } from "../../domain/account-credential.js";
 import {
   MailRetrievalTimeoutError,
+  RakutenAuthMailParseError,
   type RakutenAuthMailSource,
 } from "./rakuten-auth-mail-parser.js";
 import { PollingImageAuthenticationKeywordProvider } from "./polling-image-authentication-keyword-provider.js";
@@ -85,6 +86,23 @@ describe("PollingImageAuthenticationKeywordProvider", () => {
 
     await expect(provider.fetchKeywords(credential)).rejects.toThrow(
       MailRetrievalTimeoutError,
+    );
+  });
+
+  it("propagates parse failures when the mail body is malformed", async () => {
+    const source: RakutenAuthMailSource = {
+      fetchLatestAuthenticationMail: vi.fn(async () => "キーワードがありません"),
+    };
+
+    const provider = new PollingImageAuthenticationKeywordProvider(
+      source,
+      { pollingIntervalMs: 10, timeoutMs: 100 },
+      { now: () => new Date(0) },
+      async () => undefined,
+    );
+
+    await expect(provider.fetchKeywords(credential)).rejects.toThrow(
+      RakutenAuthMailParseError,
     );
   });
 });

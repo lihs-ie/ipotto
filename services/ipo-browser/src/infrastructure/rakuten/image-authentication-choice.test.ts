@@ -51,6 +51,18 @@ describe("image-authentication-choice", () => {
     ).toEqual(choice);
   });
 
+  it("normalizes an empty button id to null", () => {
+    const choice = buildImageAuthenticationChoice({
+      buttonId: "",
+      buttonIndex: 0,
+      onclick: null,
+      imageAlt: "さくら",
+      imageSrc: "#",
+    });
+
+    expect(choice.buttonId).toBeNull();
+  });
+
   it("matches by asset code for the real Rakuten page", () => {
     const choice = buildImageAuthenticationChoice({
       buttonId: "emoji_0",

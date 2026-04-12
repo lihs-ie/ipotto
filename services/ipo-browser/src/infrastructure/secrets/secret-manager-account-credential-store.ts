@@ -30,17 +30,28 @@ export class SecretManagerAccountCredentialStore {
    * Loads an account credential from Secret Manager.
    */
   public async getAccountCredential(secretKey: string): Promise<AccountCredential> {
-    const [version] = await this.client.accessSecretVersion({
-      name: normalizeSecretVersionName(this.projectId, secretKey),
-    });
+    let version;
+    try {
+      [version] = await this.client.accessSecretVersion({
+        name: normalizeSecretVersionName(this.projectId, secretKey),
+      });
+    } catch {
+      throw new Error("failed to access account credential secret");
+    }
+
     const data = version.payload?.data;
     if (data === undefined || data === null) {
-      throw new Error(`secret payload is empty: ${secretKey}`);
+      throw new Error("account credential secret payload is empty");
     }
 
     const payloadText =
       typeof data === "string" ? data : Buffer.from(data).toString("utf8");
-    const payload = JSON.parse(payloadText) as AccountCredentialSecretPayload;
+    let payload;
+    try {
+      payload = JSON.parse(payloadText) as AccountCredentialSecretPayload;
+    } catch {
+      throw new Error("account credential secret payload is invalid");
+    }
 
     return {
       loginId: payload.loginId,
