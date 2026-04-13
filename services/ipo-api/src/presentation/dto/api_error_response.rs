@@ -18,3 +18,40 @@ pub struct ApiErrorResponse {
 pub struct ErrorEnvelopeResponse {
     pub error: ApiErrorResponse,
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{ApiErrorDetailResponse, ApiErrorResponse, ErrorEnvelopeResponse};
+
+    #[test]
+    fn serializes_error_responses() {
+        let response = ErrorEnvelopeResponse {
+            error: ApiErrorResponse {
+                code: "VALIDATION_ERROR".to_string(),
+                message: "invalid request".to_string(),
+                details: Some(vec![ApiErrorDetailResponse {
+                    field: "targetDate".to_string(),
+                    message: "入力値を確認してください".to_string(),
+                }]),
+            },
+        };
+
+        assert_eq!(
+            serde_json::to_value(response).expect("json"),
+            json!({
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "invalid request",
+                    "details": [
+                        {
+                            "field": "targetDate",
+                            "message": "入力値を確認してください"
+                        }
+                    ]
+                }
+            })
+        );
+    }
+}

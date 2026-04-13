@@ -151,3 +151,103 @@ impl DependencyContainer {
         self.notification_ports.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use chrono::Utc;
+    use ipo_backend_shared::{
+        acl::{browser::BrokerBrowserPort, notification::NotificationPort},
+        domain::{
+            account::{AccountCredential, ConnectionTestResult},
+            stock::IpoStock,
+        },
+        errors::DomainError,
+        infrastructure::{
+            firestore::repositories::{
+                FirestoreExclusionRepository, FirestoreIpoStockRepository,
+                FirestoreLotteryApplicationRepository, FirestoreNotificationSettingRepository,
+                FirestoreOperationLogRepository,
+            },
+            notification::SlackNotificationAdapter,
+            secrets::InMemoryCredentialStore,
+        },
+    };
+    use reqwest::Client;
+
+    use super::DependencyContainer;
+    use crate::infrastructure::NotificationPortRegistry;
+
+    #[derive(Debug)]
+    struct DummyBrowserPort;
+
+    #[async_trait]
+    impl BrokerBrowserPort for DummyBrowserPort {
+        async fn fetch_ipo_stocks(
+            &self,
+        ) -> Result<Vec<ipo_backend_shared::acl::scraping::ScrapedStock>, DomainError> {
+            Ok(Vec::new())
+        }
+
+        async fn test_connection(
+            &self,
+            _credential: &AccountCredential,
+        ) -> Result<ConnectionTestResult, DomainError> {
+            Ok(ConnectionTestResult::new(true, "ok", Utc::now()))
+        }
+
+        async fn check_lottery_result(
+            &self,
+            _credential: &AccountCredential,
+            _stock: &IpoStock,
+        ) -> Result<Option<ipo_backend_shared::domain::application::LotteryResult>, DomainError>
+        {
+            Ok(None)
+        }
+    }
+
+    #[test]
+    fn initializes_default_notification_setting_and_exposes_components() {
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
+        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new());
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new());
+        let account_repository = Arc::new(
+            ipo_backend_shared::infrastructure::firestore::repositories::FirestoreSecuritiesAccountRepository::new(
+                InMemoryCredentialStore::new(),
+            ),
+        );
+        let notification_repository = Arc::new(FirestoreNotificationSettingRepository::new());
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new());
+        let notification_ports = Arc::new(NotificationPortRegistry::new(
+            Arc::new(SlackNotificationAdapter::new(Client::new()))
+                as Arc<dyn NotificationPort + Send + Sync>,
+            Arc::new(SlackNotificationAdapter::new(Client::new()))
+                as Arc<dyn NotificationPort + Send + Sync>,
+            Arc::new(SlackNotificationAdapter::new(Client::new()))
+                as Arc<dyn NotificationPort + Send + Sync>,
+        ));
+
+        let container = DependencyContainer::from_components(
+            stock_repository.clone(),
+            exclusion_repository.clone(),
+            application_repository.clone(),
+            account_repository.clone(),
+            notification_repository.clone(),
+            operation_log_repository.clone(),
+            Arc::new(DummyBrowserPort),
+            notification_ports.clone(),
+        )
+        .expect("container");
+
+        assert!(container
+            .notification_setting_repository()
+            .find_default()
+            .is_ok());
+        assert!(Arc::ptr_eq(
+            &container.notification_ports(),
+            &notification_ports
+        ));
+    }
+}

@@ -209,3 +209,129 @@ fn notification_event_type_as_str(value: NotificationEventType) -> String {
         NotificationEventType::StockUpdated => "StockUpdated".to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::BTreeMap, sync::Arc};
+
+    use async_trait::async_trait;
+    use chrono::Utc;
+    use ipo_backend_shared::{
+        acl::notification::{NotificationEvent, NotificationPort},
+        domain::notification::{NotificationEventType, NotificationSettingRepository},
+        errors::DomainError,
+        events::ApplicationCompleted,
+        infrastructure::firestore::repositories::FirestoreNotificationSettingRepository,
+    };
+    use tokio::sync::Mutex;
+
+    use crate::infrastructure::NotificationPortRegistry;
+
+    use super::{
+        ChannelInput, DispatchNotificationUseCase, GetNotificationSettingUseCase,
+        UpdateNotificationSettingInput, UpdateNotificationSettingUseCase,
+    };
+
+    #[derive(Debug, Default)]
+    struct RecordingPort {
+        sends: Mutex<usize>,
+    }
+
+    #[async_trait]
+    impl NotificationPort for RecordingPort {
+        async fn send(
+            &self,
+            _event: &NotificationEvent,
+            _destination: &ipo_backend_shared::domain::notification::ChannelDestination,
+        ) -> Result<(), DomainError> {
+            *self.sends.lock().await += 1;
+            Ok(())
+        }
+
+        fn validate_destination(
+            &self,
+            _destination: &ipo_backend_shared::domain::notification::ChannelDestination,
+        ) -> Result<(), DomainError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn updates_gets_and_dispatches_notification_settings() {
+        let repository = Arc::new(FirestoreNotificationSettingRepository::new())
+            as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let line = Arc::new(RecordingPort::default());
+        let email = Arc::new(RecordingPort::default());
+        let slack = Arc::new(RecordingPort::default());
+        let registry = Arc::new(NotificationPortRegistry::new(
+            line.clone(),
+            email.clone(),
+            slack.clone(),
+        ));
+
+        let mut destination = BTreeMap::new();
+        destination.insert("address".to_string(), "notify@example.com".to_string());
+        let mut subscriptions = BTreeMap::new();
+        subscriptions.insert("ApplicationCompleted".to_string(), true);
+        UpdateNotificationSettingUseCase::new(repository.clone())
+            .execute(UpdateNotificationSettingInput {
+                enabled: true,
+                channels: vec![ChannelInput {
+                    channel_type: "Email".to_string(),
+                    destination,
+                    enabled: true,
+                    subscriptions,
+                }],
+            })
+            .expect("update");
+
+        let output = GetNotificationSettingUseCase::new(repository.clone())
+            .execute()
+            .expect("get");
+        assert!(output.enabled);
+        assert_eq!(output.channels.len(), 1);
+
+        let sent = DispatchNotificationUseCase::new(repository, registry)
+            .execute(
+                NotificationEvent::ApplicationCompleted(ApplicationCompleted {
+                    identifier:
+                        ipo_backend_shared::domain::application::ApplicationIdentifier::generate(),
+                    stock: ipo_backend_shared::domain::stock::StockIdentifier::generate(),
+                    securities_account:
+                        ipo_backend_shared::domain::account::SecuritiesAccountIdentifier::generate(),
+                    applied_shares: ipo_backend_shared::domain::stock::Shares::new(100)
+                        .expect("shares"),
+                    applied_price: ipo_backend_shared::domain::stock::Yen::new(1000)
+                        .expect("price"),
+                    applied_at: Utc::now(),
+                }),
+                NotificationEventType::ApplicationCompleted,
+            )
+            .await
+            .expect("dispatch");
+
+        assert_eq!(sent, 1);
+        assert_eq!(*email.sends.lock().await, 1);
+        assert_eq!(*line.sends.lock().await, 0);
+        assert_eq!(*slack.sends.lock().await, 0);
+    }
+
+    #[test]
+    fn rejects_unsupported_channel_types() {
+        let repository = Arc::new(FirestoreNotificationSettingRepository::new())
+            as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let error = UpdateNotificationSettingUseCase::new(repository)
+            .execute(UpdateNotificationSettingInput {
+                enabled: true,
+                channels: vec![ChannelInput {
+                    channel_type: "PagerDuty".to_string(),
+                    destination: BTreeMap::new(),
+                    enabled: true,
+                    subscriptions: BTreeMap::new(),
+                }],
+            })
+            .expect_err("invalid channel");
+
+        assert!(matches!(error, DomainError::InvalidChannelDestination { .. }));
+    }
+}
