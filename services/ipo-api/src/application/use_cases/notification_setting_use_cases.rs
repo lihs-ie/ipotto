@@ -332,6 +332,9 @@ mod tests {
             })
             .expect_err("invalid channel");
 
-        assert!(matches!(error, DomainError::InvalidChannelDestination { .. }));
+        assert!(matches!(
+            error,
+            DomainError::InvalidChannelDestination { .. }
+        ));
     }
 }

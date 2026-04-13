@@ -70,7 +70,11 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
-    use axum::{extract::{Path, State}, http::StatusCode, Json};
+    use axum::{
+        extract::{Path, State},
+        http::StatusCode,
+        Json,
+    };
     use chrono::Utc;
     use ipo_backend_shared::{
         acl::{browser::BrokerBrowserPort, notification::NotificationPort},
@@ -170,9 +174,7 @@ mod tests {
             .expect("register");
         assert_eq!(status, StatusCode::CREATED);
 
-        let Json(listed) = list_accounts(State(container.clone()))
-            .await
-            .expect("list");
+        let Json(listed) = list_accounts(State(container.clone())).await.expect("list");
         assert_eq!(listed.total_count, 1);
 
         let Json(connection) = test_connection(

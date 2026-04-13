@@ -309,10 +309,7 @@ mod tests {
                         "notify@example.com".to_string(),
                     )]),
                     enabled: true,
-                    subscriptions: BTreeMap::from([(
-                        "ApplicationCompleted".to_string(),
-                        true,
-                    )]),
+                    subscriptions: BTreeMap::from([("ApplicationCompleted".to_string(), true)]),
                 }],
             }),
         )

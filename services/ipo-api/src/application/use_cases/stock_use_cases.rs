@@ -486,9 +486,10 @@ mod tests {
                 SecuritiesCompany, TradingPassword,
             },
             stock::{
-                BookBuildingPeriod, CompanyName, CompanyProfile, FetchOrigin, Industry, IpoOffering,
-                IpoPricing, IpoSchedule, IpoStock, IpoStockRepository, LeadUnderwriter, Market,
-                MetaSource, PriceRange, Shares, StockStatus, TickerSymbol, Yen,
+                BookBuildingPeriod, CompanyName, CompanyProfile, FetchOrigin, Industry,
+                IpoOffering, IpoPricing, IpoSchedule, IpoStock, IpoStockRepository,
+                LeadUnderwriter, Market, MetaSource, PriceRange, Shares, StockStatus, TickerSymbol,
+                Yen,
             },
         },
         errors::DomainError,
@@ -501,7 +502,10 @@ mod tests {
         },
     };
 
-    use super::{GetDashboardSummaryUseCase, GetIpoStockInput, GetIpoStockUseCase, ListIpoStocksInput, ListIpoStocksUseCase};
+    use super::{
+        GetDashboardSummaryUseCase, GetIpoStockInput, GetIpoStockUseCase, ListIpoStocksInput,
+        ListIpoStocksUseCase,
+    };
 
     fn build_stock() -> IpoStock {
         IpoStock::create(
@@ -590,11 +594,17 @@ mod tests {
         let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
             as Arc<dyn IpoStockRepository + Send + Sync>;
         let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
-            as Arc<dyn ipo_backend_shared::domain::application::LotteryApplicationRepository + Send + Sync>;
+            as Arc<
+                dyn ipo_backend_shared::domain::application::LotteryApplicationRepository
+                    + Send
+                    + Sync,
+            >;
         let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
             InMemoryCredentialStore::new(),
         )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
-        account_repository.save(&build_account()).expect("save account");
+        account_repository
+            .save(&build_account())
+            .expect("save account");
 
         let error = GetIpoStockUseCase::new(
             stock_repository.clone(),

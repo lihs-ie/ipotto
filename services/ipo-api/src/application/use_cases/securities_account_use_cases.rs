@@ -334,9 +334,7 @@ mod tests {
     use ipo_backend_shared::{
         acl::browser::BrokerBrowserPort,
         domain::{
-            account::{
-                ConnectionTestResult, SecuritiesAccountRepository, SecuritiesCompany,
-            },
+            account::{ConnectionTestResult, SecuritiesAccountRepository, SecuritiesCompany},
             stock::IpoStock,
         },
         errors::DomainError,
@@ -415,13 +413,11 @@ mod tests {
         assert_eq!(listed.items[0].login_id, "log***");
         assert_eq!(listed.items[0].mail_address, "tes***@example.com");
 
-        let output = TestSecuritiesAccountConnectionUseCase::new(
-            repository,
-            Arc::new(DummyBrowserPort),
-        )
-        .execute(&registered.identifier)
-        .await
-        .expect("test connection");
+        let output =
+            TestSecuritiesAccountConnectionUseCase::new(repository, Arc::new(DummyBrowserPort))
+                .execute(&registered.identifier)
+                .await
+                .expect("test connection");
 
         assert!(output.success);
         assert_eq!(output.message, "ok");

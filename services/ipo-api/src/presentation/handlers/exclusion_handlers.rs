@@ -87,12 +87,15 @@ mod tests {
         async fn test_connection(
             &self,
             _credential: &AccountCredential,
-        ) -> Result<ipo_backend_shared::domain::account::ConnectionTestResult, DomainError> {
-            Ok(ipo_backend_shared::domain::account::ConnectionTestResult::new(
-                true,
-                "ok",
-                chrono::Utc::now(),
-            ))
+        ) -> Result<ipo_backend_shared::domain::account::ConnectionTestResult, DomainError>
+        {
+            Ok(
+                ipo_backend_shared::domain::account::ConnectionTestResult::new(
+                    true,
+                    "ok",
+                    chrono::Utc::now(),
+                ),
+            )
         }
 
         async fn check_lottery_result(

@@ -128,8 +128,7 @@ mod tests {
     use std::sync::Arc;
 
     use ipo_backend_shared::{
-        domain::exclusion::ExclusionRepository,
-        errors::DomainError,
+        domain::exclusion::ExclusionRepository, errors::DomainError,
         infrastructure::firestore::repositories::FirestoreExclusionRepository,
     };
 
@@ -140,8 +139,8 @@ mod tests {
 
     #[test]
     fn registers_lists_and_removes_exclusions() {
-        let repository =
-            Arc::new(FirestoreExclusionRepository::new()) as Arc<dyn ExclusionRepository + Send + Sync>;
+        let repository = Arc::new(FirestoreExclusionRepository::new())
+            as Arc<dyn ExclusionRepository + Send + Sync>;
         let register = RegisterExclusionUseCase::new(repository.clone());
         let output = register
             .execute(RegisterExclusionInput {
@@ -163,8 +162,8 @@ mod tests {
 
     #[test]
     fn rejects_duplicate_company_names() {
-        let repository =
-            Arc::new(FirestoreExclusionRepository::new()) as Arc<dyn ExclusionRepository + Send + Sync>;
+        let repository = Arc::new(FirestoreExclusionRepository::new())
+            as Arc<dyn ExclusionRepository + Send + Sync>;
         let use_case = RegisterExclusionUseCase::new(repository.clone());
         use_case
             .execute(RegisterExclusionInput {

@@ -73,9 +73,10 @@ mod tests {
         domain::{
             account::{AccountCredential, ConnectionTestResult},
             stock::{
-                BookBuildingPeriod, CompanyName, CompanyProfile, FetchOrigin, Industry, IpoOffering,
-                IpoPricing, IpoSchedule, IpoStock, IpoStockRepository, LeadUnderwriter, Market,
-                MetaSource, PriceRange, Shares, StockStatus, TickerSymbol, Yen,
+                BookBuildingPeriod, CompanyName, CompanyProfile, FetchOrigin, Industry,
+                IpoOffering, IpoPricing, IpoSchedule, IpoStock, IpoStockRepository,
+                LeadUnderwriter, Market, MetaSource, PriceRange, Shares, StockStatus, TickerSymbol,
+                Yen,
             },
         },
         errors::DomainError,
