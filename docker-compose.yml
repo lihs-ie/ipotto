@@ -38,6 +38,7 @@ services:
       - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
       - MOCK_SERVER_URL=http://html-mock-server:80
+      - IPO_API_BASE_URL=http://ipo-api:8080
     deploy:
       resources:
         limits:

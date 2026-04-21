@@ -1,15 +1,29 @@
 import { Router, type Request, type Response } from "express";
 
 import type { BrowserManager } from "../browser/manager.js";
-import { rakutenLogin } from "../flows/login.js";
+import { runImageAuthentication } from "../flows/image-auth/flow.js";
+import {
+  rakutenLogin,
+  type TwoFactorHandler,
+  type TwoFactorOutcome,
+} from "../flows/login.js";
+import { ImapMailReader } from "../mail/imap-reader.js";
+import type { NotificationPublisher } from "../notifications/publisher.js";
 
-// Phase 3 Sprint 5.3 — POST /internal/accounts/test (API-013 delegate).
-// Drives the Rakuten login flow through Playwright against the broker
-// site provided by the `MOCK_SERVER_URL` env var (defaults to the
-// docker-compose html-mock-server fixture). Phase 3 Sprint 7.3 will
-// factor the stand-alone connection-test flow out of this endpoint;
-// for now success is: login form interaction completed without
-// throwing.
+// Phase 3 Sprint 5.3 / 6.4 / 6.5 — POST /internal/accounts/test
+// (API-013 delegate). Composes the 3-tier defence-in-depth contract
+// from docs/03-detailed-design/acl.md §3.7:
+//   1. Session restore — BrowserManager reuses launchPersistentContext
+//      user-data directories so Rakuten's device token skips 2FA on
+//      subsequent logins.
+//   2. Mail OTP — `ImapMailReader` polls the broker's 認証 mail
+//      within 120 s / 3 s cadence; the resulting keyword pair drives
+//      `runImageAuthentication` which clicks the matching buttons.
+//   3. Manual fallback — on any Tier-2 failure we publish an
+//      OperationErrorOccurred event to /internal/pubsub/ipo-notification
+//      so the domain dispatcher fans out LINE / SendGrid / Slack
+//      notifications. Per the ACL spec we never retry image-auth
+//      automatically (3 consecutive failures lock the broker account).
 
 type ConnectionTestRequest = {
   loginId: string;
@@ -31,7 +45,12 @@ const credentialFields = [
   "imapPort",
 ] as const satisfies ReadonlyArray<keyof ConnectionTestRequest>;
 
-export function accountsRouter(manager: BrowserManager): Router {
+const MAIL_OTP_TIMEOUT_MS = 120_000;
+
+export function accountsRouter(
+  manager: BrowserManager,
+  publisher: NotificationPublisher,
+): Router {
   const router = Router();
 
   router.post(
@@ -55,6 +74,7 @@ export function accountsRouter(manager: BrowserManager): Router {
       const mockServerUrl =
         process.env["MOCK_SERVER_URL"] ?? "http://html-mock-server:80";
       const loginPageUrl = `${mockServerUrl}/rakuten/login_page.html`;
+      const twoFactorHandler = buildTwoFactorHandler(validated, publisher);
 
       try {
         const context = await manager.acquire(validated.loginId);
@@ -62,6 +82,7 @@ export function accountsRouter(manager: BrowserManager): Router {
           loginId: validated.loginId,
           password: validated.loginPassword,
           loginPageUrl,
+          twoFactorHandler,
         });
         if (result.status === "success") {
           response.json({
@@ -92,4 +113,59 @@ export function accountsRouter(manager: BrowserManager): Router {
   );
 
   return router;
+}
+
+function buildTwoFactorHandler(
+  credential: ConnectionTestRequest,
+  publisher: NotificationPublisher,
+): TwoFactorHandler {
+  const cutoff = new Date();
+  const reader = new ImapMailReader({
+    credential: {
+      mailAddress: credential.mailAddress,
+      mailPassword: credential.mailPassword,
+      imapHost: credential.imapHost,
+      imapPort: credential.imapPort,
+    },
+  });
+
+  return async ({ page }): Promise<TwoFactorOutcome> => {
+    let keywords;
+    try {
+      keywords = await reader.fetchImageAuthenticationKeywords(
+        cutoff,
+        MAIL_OTP_TIMEOUT_MS,
+      );
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      await publisher.publishOperationError({
+        serviceName: "ipo-browser",
+        operationType: "image_authentication_mail_otp",
+        errorMessage: `mail OTP retrieval failed: ${reason}`,
+      });
+      return {
+        status: "failed",
+        reason: `mail OTP retrieval failed: ${reason}`,
+        screenshotPath: null,
+      };
+    }
+
+    const result = await runImageAuthentication(page, { keywords });
+    if (result.status === "success") {
+      return {
+        status: "authenticated",
+        message: "image authentication solved via mail OTP",
+      };
+    }
+    await publisher.publishOperationError({
+      serviceName: "ipo-browser",
+      operationType: "image_authentication",
+      errorMessage: result.reason,
+    });
+    return {
+      status: "failed",
+      reason: result.reason,
+      screenshotPath: result.screenshotPath,
+    };
+  };
 }
