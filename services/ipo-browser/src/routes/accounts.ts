@@ -1,8 +1,16 @@
 import { Router, type Request, type Response } from "express";
 
-// Phase 2 Sprint 3 Task 3.4 / Phase 3 Sprint 5 — POST /internal/accounts/test
-// (API-013 delegate). Verified against a reachability probe today; Phase 3
-// Sprint 5.2+ will swap in the full Playwright login flow against 楽天証券.
+import type { BrowserManager } from "../browser/manager.js";
+import { rakutenLogin } from "../flows/login.js";
+
+// Phase 3 Sprint 5.3 — POST /internal/accounts/test (API-013 delegate).
+// Drives the Rakuten login flow through Playwright against the broker
+// site provided by the `MOCK_SERVER_URL` env var (defaults to the
+// docker-compose html-mock-server fixture). Phase 3 Sprint 7.3 will
+// factor the stand-alone connection-test flow out of this endpoint;
+// for now success is: login form interaction completed without
+// throwing.
+
 type ConnectionTestRequest = {
   loginId: string;
   loginPassword: string;
@@ -23,7 +31,7 @@ const credentialFields = [
   "imapPort",
 ] as const satisfies ReadonlyArray<keyof ConnectionTestRequest>;
 
-export function accountsRouter(): Router {
+export function accountsRouter(manager: BrowserManager): Router {
   const router = Router();
 
   router.post(
@@ -43,22 +51,40 @@ export function accountsRouter(): Router {
         return;
       }
 
+      const validated = body as ConnectionTestRequest;
       const mockServerUrl =
         process.env["MOCK_SERVER_URL"] ?? "http://html-mock-server:80";
+      const loginPageUrl = `${mockServerUrl}/rakuten/login_page.html`;
+
       try {
-        const reachability = await fetch(mockServerUrl);
-        response.json({
-          success: reachability.ok,
-          message: reachability.ok
-            ? "broker site reachable"
-            : `broker site returned ${reachability.status}`,
-          testedAt: new Date().toISOString(),
+        const context = await manager.acquire(validated.loginId);
+        const result = await rakutenLogin(context, {
+          loginId: validated.loginId,
+          password: validated.loginPassword,
+          loginPageUrl,
         });
+        if (result.status === "success") {
+          response.json({
+            success: true,
+            message: result.message,
+            testedAt: new Date().toISOString(),
+          });
+        } else {
+          response.json({
+            success: false,
+            message: result.reason,
+            testedAt: new Date().toISOString(),
+          });
+        }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        response.json({
+        console.error(
+          `browser automation error (loginId=${validated.loginId})`,
+          error,
+        );
+        response.status(502).json({
           success: false,
-          message: `broker site unreachable: ${reason}`,
+          message: `browser automation error: ${reason}`,
           testedAt: new Date().toISOString(),
         });
       }

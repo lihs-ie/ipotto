@@ -1,0 +1,22 @@
+# Broker-specific DOM selectors consumed by the Playwright flows.
+# Phase 3 Sprint 5.3 — externalized so operators can rotate selectors
+# without shipping a new binary when Rakuten changes their markup.
+# Fallback arrays are tried left-to-right; the primary selector is
+# the `primary` key.
+rakuten:
+  login:
+    loginIdInput:
+      primary: "#loginid"
+      fallback:
+        - "input[name='loginid']"
+        - "input[type='text']:nth-of-type(1)"
+    passwordInput:
+      primary: "#passwd"
+      fallback:
+        - "input[name='passwd']"
+        - "input[type='password']"
+    submitButton:
+      primary: "button[type='submit']"
+      fallback:
+        - "form#login-form button"
+        - "button:has-text('ログイン')"
