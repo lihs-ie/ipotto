@@ -1,5 +1,13 @@
+use std::{env, sync::Arc};
+
+use async_trait::async_trait;
 use ipo_backend_shared::http::HttpServiceConfig;
-use std::env;
+
+use crate::middleware::firebase_jwk_cache::FetchedJwks;
+use crate::middleware::{
+    FirebaseAuthConfig, FirebaseAuthError, FirebaseJwkCache, FirebaseTokenVerifier,
+    GoogleSecureTokenFetcher, JwksFetcher,
+};
 
 pub const HTTP_SERVICE_CONFIG: HttpServiceConfig = HttpServiceConfig::new("ipo-api", 8080);
 
@@ -15,4 +23,34 @@ pub fn sendgrid_api_key() -> Option<String> {
     env::var("SENDGRID_API_KEY")
         .ok()
         .filter(|value| !value.is_empty())
+}
+
+/// Constructs the Firebase ID token verifier used by the authentication
+/// middleware. When `FIREBASE_AUTH_EMULATOR_HOST` is set the verifier runs in
+/// emulator mode and never calls the upstream JWK endpoint.
+pub fn build_firebase_token_verifier() -> Result<Arc<FirebaseTokenVerifier>, String> {
+    let config = FirebaseAuthConfig::from_env()?;
+    let fetcher: Arc<dyn JwksFetcher> = if config.emulator_host().is_some() {
+        Arc::new(EmulatorModeFetcher)
+    } else {
+        Arc::new(GoogleSecureTokenFetcher::new(reqwest::Client::new()))
+    };
+    let cache = Arc::new(FirebaseJwkCache::new(fetcher));
+    Ok(Arc::new(FirebaseTokenVerifier::new(config, cache)))
+}
+
+/// Placeholder fetcher returned in emulator mode. The emulator path in
+/// [`FirebaseTokenVerifier::verify`] short-circuits before reaching the JWK
+/// cache, so this implementation is only invoked if emulator-mode logic is
+/// ever bypassed, in which case we prefer a loud failure over a silent
+/// fallback to production verification.
+struct EmulatorModeFetcher;
+
+#[async_trait]
+impl JwksFetcher for EmulatorModeFetcher {
+    async fn fetch(&self) -> Result<FetchedJwks, FirebaseAuthError> {
+        Err(FirebaseAuthError::JwksFetchFailed(
+            "JWK fetch attempted in emulator mode".to_string(),
+        ))
+    }
 }
