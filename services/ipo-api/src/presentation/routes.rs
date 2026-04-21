@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    middleware::from_fn_with_state,
+    middleware::{from_fn, from_fn_with_state},
     routing::{delete, get, post, put},
     Router,
 };
@@ -9,19 +9,24 @@ use ipo_backend_shared::http::create_health_check_router;
 
 use crate::{
     infrastructure::DependencyContainer,
-    middleware::{firebase_auth_middleware, FirebaseTokenVerifier},
+    middleware::{
+        email_allowlist_middleware, firebase_auth_middleware, request_logging_middleware,
+        EmailAllowlistConfig, FirebaseTokenVerifier,
+    },
     presentation::handlers,
 };
 
 /// Creates the API router.
 ///
 /// Pass `Some(verifier)` (production) to enforce Firebase ID token
-/// verification on the `/api/v1/*` routes. Pass `None` in tests that exercise
-/// handlers directly without authentication setup; `/health` and
-/// `/internal/pubsub/*` stay unauthenticated in both cases.
+/// verification on the `/api/v1/*` routes. `allowlist` additionally gates
+/// those routes behind the configured email allow-list. Pass `None` in
+/// tests that exercise handlers directly without authentication setup;
+/// `/health` and `/internal/pubsub/*` stay unauthenticated in both cases.
 pub fn create_router(
     container: DependencyContainer,
     verifier: Option<Arc<FirebaseTokenVerifier>>,
+    allowlist: Option<Arc<EmailAllowlistConfig>>,
 ) -> Router {
     let authenticated = Router::<DependencyContainer>::new()
         .route("/api/v1/stocks", get(handlers::stock_handlers::list_stocks))
@@ -63,6 +68,19 @@ pub fn create_router(
         )
         .route("/api/v1/logs", get(handlers::log_handlers::list_logs));
 
+    // Axum's `route_layer` registers layers in "outside-first" order, so the
+    // last one added is the outermost. The intended request pipeline on
+    // authenticated routes is:
+    //     firebase_auth → email_allowlist → request_logging → handler
+    // so we add them in the reverse order: logging first (innermost), then
+    // the allow-list, then the Firebase verifier.
+    let authenticated = authenticated.route_layer(from_fn(request_logging_middleware));
+    let authenticated = match allowlist {
+        Some(allowlist) => {
+            authenticated.route_layer(from_fn_with_state(allowlist, email_allowlist_middleware))
+        }
+        None => authenticated,
+    };
     let authenticated = match verifier {
         Some(verifier) => {
             authenticated.route_layer(from_fn_with_state(verifier, firebase_auth_middleware))
@@ -268,7 +286,7 @@ mod tests {
             .stock_repository()
             .save(&build_stock())
             .expect("save stock");
-        let app = create_router(container, None);
+        let app = create_router(container, None, None);
 
         let response = app
             .oneshot(
@@ -291,7 +309,7 @@ mod tests {
 
     #[tokio::test]
     async fn registers_exclusion_via_http() {
-        let app = create_router(DependencyContainer::new().expect("container"), None);
+        let app = create_router(DependencyContainer::new().expect("container"), None, None);
 
         let response = app
             .oneshot(
@@ -363,6 +381,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
             None,
         );
 
@@ -480,6 +499,7 @@ mod tests {
             )
             .expect("container"),
             None,
+            None,
         );
 
         let event = ApplicationCompleted {
@@ -581,6 +601,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
             None,
         );
 
@@ -701,6 +722,7 @@ mod tests {
             )
             .expect("container"),
             None,
+            None,
         );
 
         let stock = build_stock();
@@ -802,6 +824,7 @@ mod tests {
             )
             .expect("container"),
             None,
+            None,
         );
 
         let event = LotteryResultConfirmed {
@@ -899,6 +922,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
             None,
         );
 
@@ -1018,6 +1042,7 @@ mod tests {
             )
             .expect("container"),
             None,
+            None,
         );
 
         let event = LotteryResultConfirmed {
@@ -1095,6 +1120,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
             None,
         );
 
@@ -1179,6 +1205,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
             None,
         );
 

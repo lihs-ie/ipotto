@@ -4,5 +4,6 @@ pub mod errors;
 pub mod events;
 pub mod http;
 pub mod infrastructure;
+pub mod logging;
 pub mod services;
 pub mod testing;
