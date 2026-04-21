@@ -91,6 +91,26 @@ services:
       ipo-browser:
         condition: service_started
 
+  ipo-applier:
+    build:
+      context: ./services
+      dockerfile: ../docker/ipo-applier/Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      - PORT=8084
+      - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - IPO_BROWSER_BASE_URL=http://ipo-browser:8081
+      - RUST_LOG=info
+    depends_on:
+      firebase-emulator:
+        condition: service_healthy
+      pubsub-emulator:
+        condition: service_started
+      ipo-browser:
+        condition: service_started
+
   ipo-frontend:
     build:
       context: ./services

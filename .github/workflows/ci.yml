@@ -86,7 +86,8 @@ jobs:
             if curl -sf http://localhost:8080/health > /dev/null 2>&1 && \
                curl -sf http://localhost:8081/health > /dev/null 2>&1 && \
                curl -sf http://localhost:8082/health > /dev/null 2>&1 && \
-               curl -sf http://localhost:8083/health > /dev/null 2>&1; then
+               curl -sf http://localhost:8083/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:8084/health > /dev/null 2>&1; then
               echo "Services ready"
               exit 0
             fi
@@ -412,6 +413,25 @@ jobs:
           curl -sf -X POST http://localhost:8083/internal/pubsub/check \
             | tee /tmp/ipo-result-checker-response.json
           jq -e '.checkedCount == 0' /tmp/ipo-result-checker-response.json
+
+      - name: Phase 4 Sprint 8 smoke — ipo-applier (DD-101) health + Pub/Sub apply trigger
+        run: |
+          # Health check.
+          curl -sf http://localhost:8084/health | jq -e '.status == "ok"'
+          # Explicit target_date payload — with no accounts registered the
+          # use case simply returns appliedCount=0 / skippedCount=0 / failedCount=0,
+          # which exercises the full pipeline (Firestore + Pub/Sub emulator +
+          # repository wiring) without depending on test fixtures.
+          payload='{"targetDate":"2026-04-22"}'
+          curl -sf -H 'content-type: application/json' \
+            -X POST http://localhost:8084/internal/pubsub/apply \
+            -d "$payload" \
+            | tee /tmp/ipo-applier-response.json
+          jq -e '.appliedCount >= 0 and .skippedCount >= 0 and .failedCount >= 0' \
+            /tmp/ipo-applier-response.json
+          # Empty body — must default to today's date without 4xx.
+          curl -sf -X POST http://localhost:8084/internal/pubsub/apply \
+            | jq -e '.appliedCount >= 0'
 
       - name: Show logs on failure
         if: failure()

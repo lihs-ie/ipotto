@@ -52,6 +52,7 @@ graph TB
             BrowserService["ipo-browser<br>(Node.js/Playwright)<br>on-demand"]
             InfoFetcher["ipo-info-fetcher<br>(Rust)<br>on-demand"]
             ResultChecker["ipo-result-checker<br>(Rust)<br>on-demand"]
+            Applier["ipo-applier<br>(Rust)<br>on-demand<br>Phase 4 Sprint 8"]
         end
 
         Scheduler[Cloud Scheduler]
@@ -78,8 +79,13 @@ graph TB
 
     Scheduler -->|cron| PubSub
     PubSub -->|ipo-info-fetch| InfoFetcher
-    PubSub -->|ipo-apply| BrowserService
+    PubSub -->|ipo-apply| Applier
     PubSub -->|ipo-result-check| ResultChecker
+
+    Applier --> BrowserService
+    Applier --> Firestore
+    Applier --> SecretManager
+    Applier -->|publish: ApplicationCompleted/Failed| PubSub
 
     API --> Firestore
     API --> SecretManager
@@ -120,23 +126,29 @@ graph LR
         S2[ipo-browser]
         S3[ipo-result-checker]
         S4[ipo-api<br>通知処理]
+        S5[ipo-applier<br>Phase 4 Sprint 8]
     end
 
     CS -->|publish| T1
     T1 -->|subscription: fetch| S1
-    T1 -->|subscription: apply| S2
+    T1 -->|subscription: apply| S5
     T1 -->|subscription: check| S3
 
     S1 -->|publish| T2
     T2 -->|subscription| S4
 
+    S5 -->|ブラウザ操作依頼<br>POST /internal/lottery-applications/submit| S2
+    S5 -->|publish ApplicationCompleted<br>/ApplicationFailed| T4
+
     S3 -->|ブラウザ操作依頼| S2
     S3 -->|publish| T3
     T3 -->|subscription| S4
 
-    S2 -->|publish| T4
+    T4 -->|subscription| S4
     S4 -->|LINE/Email/Slack| 通知送信
 ```
+
+`ipo-applier` は Phase 4 Sprint 8 で新設される subscriber サービス。Cloud Scheduler から `ipo-job-trigger` 経由で daily 発火し、DD-101 `ApplyForLotteryUseCase` を実行する。ブラウザ操作自体は `ipo-browser` に委譲し (POST `/internal/lottery-applications/submit`)、成否に応じて `ApplicationCompleted` / `ApplicationFailed` を `ipo-notification` トピックに publish する。
 
 ## 4. 技術スタック
 
