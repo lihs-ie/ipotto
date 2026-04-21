@@ -165,6 +165,103 @@ jobs:
             exit 1
           fi
 
+      - name: Phase 2 Sprint 3 smoke — exclusion CRUD (API-005 / 006)
+        env:
+          ALLOWED_TOKEN: ${{ steps.mint_allowed_token.outputs.token }}
+        run: |
+          auth_header="Authorization: Bearer ${ALLOWED_TOKEN}"
+
+          response=$(curl -sf -H "$auth_header" -H 'content-type: application/json' \
+            -X POST http://localhost:8080/api/v1/exclusions \
+            -d '{"companyName":"スモークテスト株式会社","reason":"phase2-smoke"}')
+          identifier=$(echo "$response" | jq -r '.identifier')
+          if [ -z "$identifier" ] || [ "$identifier" = "null" ]; then
+            echo "failed to register exclusion: $response"; exit 1
+          fi
+
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/exclusions \
+            | jq -e --arg id "$identifier" '.items | any(.identifier == $id)'
+
+          status=$(curl -o /dev/null -s -w "%{http_code}" \
+            -H "$auth_header" \
+            -X DELETE "http://localhost:8080/api/v1/exclusions/${identifier}")
+          if [ "$status" != "204" ]; then
+            echo "expected 204 on delete exclusion, got $status"; exit 1
+          fi
+
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/exclusions \
+            | jq -e --arg id "$identifier" '.items | any(.identifier == $id) | not'
+
+      - name: Phase 2 Sprint 3 smoke — notification settings update (API-008)
+        env:
+          ALLOWED_TOKEN: ${{ steps.mint_allowed_token.outputs.token }}
+        run: |
+          auth_header="Authorization: Bearer ${ALLOWED_TOKEN}"
+
+          payload='{
+            "enabled": true,
+            "channels": [
+              {
+                "channelType": "Email",
+                "destination": {"address": "smoke-target@example.com"},
+                "enabled": true,
+                "subscriptions": {"ApplicationCompleted": true}
+              }
+            ]
+          }'
+          curl -sf -H "$auth_header" -H 'content-type: application/json' \
+            -X PUT http://localhost:8080/api/v1/notifications/settings \
+            -d "$payload" \
+            | jq -e '.channelCount >= 1 and .enabled == true'
+
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/notifications/settings \
+            | jq -e '.enabled == true and (.channels | length) >= 1'
+
+      - name: Phase 2 Sprint 3 smoke — securities account CRUD (API-010 / 011 / 012)
+        env:
+          ALLOWED_TOKEN: ${{ steps.mint_allowed_token.outputs.token }}
+        run: |
+          auth_header="Authorization: Bearer ${ALLOWED_TOKEN}"
+
+          register_payload='{
+            "securitiesCompany": "Rakuten",
+            "loginId": "smokeuser",
+            "loginPassword": "smoke-password-1",
+            "tradingPassword": "smoke-trading-1",
+            "mailAddress": "smoke@example.com",
+            "mailPassword": "smoke-mail-1",
+            "imapHost": "imap.example.com",
+            "imapPort": 993
+          }'
+          response=$(curl -sf -H "$auth_header" -H 'content-type: application/json' \
+            -X POST http://localhost:8080/api/v1/accounts \
+            -d "$register_payload")
+          identifier=$(echo "$response" | jq -r '.identifier')
+          if [ -z "$identifier" ] || [ "$identifier" = "null" ]; then
+            echo "failed to register account: $response"; exit 1
+          fi
+
+          update_payload='{
+            "loginId": "updated-smokeuser",
+            "loginPassword": "smoke-password-2",
+            "tradingPassword": "smoke-trading-2",
+            "mailAddress": "smoke-updated@example.com",
+            "mailPassword": "smoke-mail-2",
+            "imapHost": "imap-updated.example.com",
+            "imapPort": 993
+          }'
+          curl -sf -H "$auth_header" -H 'content-type: application/json' \
+            -X PUT "http://localhost:8080/api/v1/accounts/${identifier}" \
+            -d "$update_payload" \
+            | jq -e --arg id "$identifier" '.identifier == $id'
+
+          status=$(curl -o /dev/null -s -w "%{http_code}" \
+            -H "$auth_header" \
+            -X DELETE "http://localhost:8080/api/v1/accounts/${identifier}")
+          if [ "$status" != "204" ]; then
+            echo "expected 204 on delete account, got $status"; exit 1
+          fi
+
       - name: Smoke test ipo-info-fetcher
         run: |
           curl -sf http://localhost:8082/health | jq -e '.status == "ok"'
