@@ -131,8 +131,8 @@ Authorization: Bearer <firebase_id_token>
 | HTTPステータス | エラーコード | 説明 |
 |---|---|---|
 | 400 | `VALIDATION_ERROR` | リクエストパラメータが不正 |
-| 401 | `UNAUTHORIZED` | IDトークンが無効または期限切れ |
-| 403 | `FORBIDDEN` | 許可されたユーザーではない |
+| 401 | `AUTHORIZATION_HEADER_INVALID` / `TOKEN_INVALID` / `TOKEN_EXPIRED` / `TOKEN_REJECTED` | IDトークンの欠落・署名不正・期限切れ・iss/aud 不一致 |
+| 403 | `EMAIL_MISSING` / `EMAIL_NOT_ALLOWED` / `EMAIL_REQUIRED` | 許可メールリスト (`ALLOWED_EMAIL`) に含まれない、またはトークンに email がない |
 | 404 | `NOT_FOUND` | リソースが見つからない |
 | 409 | `CONFLICT` | リソースの競合（重複登録等） |
 | 422 | `UNPROCESSABLE_ENTITY` | ビジネスルール違反 |

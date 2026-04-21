@@ -64,7 +64,7 @@ author: "lihs"
 | 認証方式 | Firebase Authentication（Googleアカウントログイン） |
 | トークン形式 | Firebase IDトークン（JWT / RS256） |
 | トークン有効期限 | 1時間（Firebase SDK が自動リフレッシュ） |
-| 許可ユーザー制限 | 環境変数 `ALLOWED_USER_EMAIL` で許可するメールアドレスを指定。それ以外は403 |
+| 許可ユーザー制限 | 環境変数 `ALLOWED_EMAIL` で許可するメールアドレスを指定（カンマ区切りで複数可、大文字小文字無視）。それ以外は 403 Forbidden |
 
 ### 3.2 認証フロー
 
@@ -90,7 +90,7 @@ sequenceDiagram
     FireAuth-->>Frontend: IDトークン（JWT）
     Frontend->>API: GET /api/v1/dashboard (Authorization: Bearer {token})
     API->>API: IDトークン検証（Firebase Admin SDK）
-    API->>API: メールアドレスがALLOWED_USER_EMAILと一致するか確認
+    API->>API: メールアドレスが ALLOWED_EMAIL と一致するか確認
 
     alt 許可ユーザー
         API-->>Frontend: 200 OK

@@ -5,8 +5,8 @@ use ipo_backend_shared::http::HttpServiceConfig;
 
 use crate::middleware::firebase_jwk_cache::FetchedJwks;
 use crate::middleware::{
-    FirebaseAuthConfig, FirebaseAuthError, FirebaseJwkCache, FirebaseTokenVerifier,
-    GoogleSecureTokenFetcher, JwksFetcher,
+    EmailAllowlistConfig, FirebaseAuthConfig, FirebaseAuthError, FirebaseJwkCache,
+    FirebaseTokenVerifier, GoogleSecureTokenFetcher, JwksFetcher,
 };
 
 pub const HTTP_SERVICE_CONFIG: HttpServiceConfig = HttpServiceConfig::new("ipo-api", 8080);
@@ -23,6 +23,11 @@ pub fn sendgrid_api_key() -> Option<String> {
     env::var("SENDGRID_API_KEY")
         .ok()
         .filter(|value| !value.is_empty())
+}
+
+/// Loads the email allow-list from `ALLOWED_EMAIL` (comma-separated).
+pub fn build_email_allowlist() -> Result<Arc<EmailAllowlistConfig>, String> {
+    EmailAllowlistConfig::from_env().map(Arc::new)
 }
 
 /// Constructs the Firebase ID token verifier used by the authentication

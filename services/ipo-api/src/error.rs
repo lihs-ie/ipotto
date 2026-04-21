@@ -50,6 +50,10 @@ impl ApiError {
         Self::new(StatusCode::NOT_FOUND, "NOT_FOUND", message, None)
     }
 
+    pub fn forbidden(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::new(StatusCode::FORBIDDEN, code, message, None)
+    }
+
     pub fn service_unavailable(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self::new(StatusCode::SERVICE_UNAVAILABLE, code, message, None)
     }
@@ -150,6 +154,13 @@ mod tests {
         .into_response();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn forbidden_returns_403_with_supplied_code_and_message() {
+        let response = ApiError::forbidden("EMAIL_NOT_ALLOWED", "メールが許可リストにありません")
+            .into_response();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
     #[test]

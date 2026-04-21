@@ -1,3 +1,4 @@
+mod email_allowlist;
 mod firebase_auth;
 mod firebase_error;
 pub(crate) mod firebase_jwk_cache;
@@ -7,6 +8,7 @@ mod google_secure_token_fetcher;
 mod test_keypair;
 mod verified_token;
 
+pub use email_allowlist::{email_allowlist_middleware, EmailAllowlistConfig};
 pub use firebase_auth::firebase_auth_middleware;
 pub use firebase_error::FirebaseAuthError;
 pub use firebase_jwk_cache::{FirebaseJwkCache, JwksFetcher};
