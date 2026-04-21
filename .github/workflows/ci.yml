@@ -199,6 +199,10 @@ jobs:
         run: |
           auth_header="Authorization: Bearer ${ALLOWED_TOKEN}"
 
+          # Register Email + LINE + Slack channels so the Sprint 4
+          # dispatch smoke can assert that every adapter reaches its
+          # respective notification-mock endpoint when a single
+          # ApplicationCompleted event is published.
           payload='{
             "enabled": true,
             "channels": [
@@ -207,16 +211,28 @@ jobs:
                 "destination": {"address": "smoke-target@example.com"},
                 "enabled": true,
                 "subscriptions": {"ApplicationCompleted": true}
+              },
+              {
+                "channelType": "LINE",
+                "destination": {"token": "smoke-line-token"},
+                "enabled": true,
+                "subscriptions": {"ApplicationCompleted": true}
+              },
+              {
+                "channelType": "Slack",
+                "destination": {"webhookUrl": "http://notification-mock:80/slack/smoke"},
+                "enabled": true,
+                "subscriptions": {"ApplicationCompleted": true}
               }
             ]
           }'
           curl -sf -H "$auth_header" -H 'content-type: application/json' \
             -X PUT http://localhost:8080/api/v1/notifications/settings \
             -d "$payload" \
-            | jq -e '.channelCount >= 1 and .enabled == true'
+            | jq -e '.channelCount == 3 and .enabled == true'
 
           curl -sf -H "$auth_header" http://localhost:8080/api/v1/notifications/settings \
-            | jq -e '.enabled == true and (.channels | length) >= 1'
+            | jq -e '.enabled == true and (.channels | length) == 3'
 
       - name: Phase 2 Sprint 3 smoke — securities account CRUD (API-010 / 011 / 012)
         env:
@@ -263,15 +279,18 @@ jobs:
             echo "expected 204 on delete account, got $status"; exit 1
           fi
 
-      - name: Phase 2 Sprint 4 smoke — notification dispatch (Email via SendGrid mock)
+      - name: Phase 2 Sprint 4 smoke — notification dispatch (Email + LINE + Slack via notification-mock)
         run: |
-          # The Sprint 3 notification settings step above already
-          # installed an Email channel subscribed to
+          # The Sprint 3 notification settings step above installed
+          # three channels (Email / LINE / Slack) all subscribed to
           # ApplicationCompleted. Publishing the Pub/Sub envelope to
           # /internal/pubsub/ipo-notification makes the ipo-api
-          # dispatch use case resolve that channel and hit the
-          # SendGrid mock endpoint configured via
-          # SENDGRID_ENDPOINT=http://notification-mock:80/sendgrid/mail/send.
+          # dispatch use case resolve all three channels and hit the
+          # corresponding notification-mock endpoints:
+          #   - SENDGRID_ENDPOINT -> /sendgrid/mail/send (202)
+          #   - LINE_NOTIFY_ENDPOINT -> /line/api/notify (200)
+          #   - Slack channel's webhookUrl -> /slack/smoke (200)
+          # A single 204 response confirms every adapter succeeded.
           # ApplicationCompleted does not use camelCase on its fields
           # (unlike the API-level DTOs), so the payload must use the
           # raw domain event's snake_case field names.
