@@ -21,24 +21,30 @@ rakuten:
         - "form#login-form button"
         - "button:has-text('ログイン')"
 
-  # Phase 3 Sprint 6 — 2FA 画像認証画面 (image auth) の DOM 構造。
-  # 実画面は alt 属性付きの画像ボタンが複数並び、メールで届く
-  # "keyword1 + keyword2" のキーワードに対応する 2 つのボタンを順に
-  # クリックして送信する形式。
+  # Phase 3 Sprint 6 / Sprint 7 — 2FA 画像認証画面。
+  # primary は docs/reference/2段階認証画面.html の実画面セレクタを採用し、
+  # fallback に既存モック (`tests/fixtures/html/rakuten/image_auth_page.html`)
+  # のシンプル DOM を残すことで段階移行する。実画面には alt 属性が無いため
+  # matcher は alt → onclick 内 charaWord の 2 段経路でキーワードを解決する。
   imageAuthentication:
     container:
-      primary: "#image-auth-container"
+      primary: "form[name='SotpLoginForOtherChannelForm']"
       fallback:
+        - "#image-auth-container"
         - "main div:has(button img[alt])"
     imageButtons:
-      primary: "#image-buttons button"
+      primary: "button.pcmm_emoji-img[id^='emoji_']"
       fallback:
+        - "#image-buttons button"
         - "button:has(img[alt])"
     imageElement:
       primary: "img[alt]"
+      fallback:
+        - "img"
     submitButton:
       primary: "#submit-button"
       fallback:
+        - "input.pcmm_emoji-btn__primary[type='button']"
         - "button[type='submit']"
         - "button:has-text('確認')"
     successIndicator:
@@ -48,4 +54,82 @@ rakuten:
     errorMessage:
       primary: "#auth-error"
       fallback:
+        - ".pcmm_emoji-art--is-error"
+        - ".error_filed"
         - "[class*='error']"
+
+  # Phase 3 Sprint 7 — 申込フロー (IPO 申込一覧 → 申込フォーム → 結果画面)。
+  # primary は `tests/fixtures/html/rakuten/apply_list_page.html` と
+  # `apply_form_page.html` が提供する属性に揃え、実サイトでの揺れに備えて
+  # fallback に粒度違いの候補を並べる。
+  applyList:
+    stockRow:
+      primary: "[data-stock-identifier]"
+      fallback:
+        - "article.ipo-stock"
+        - "tr[data-company-name]"
+    applyButton:
+      primary: ".apply-button"
+      fallback:
+        - "a:has-text('申込')"
+        - "button:has-text('申込')"
+
+  applyForm:
+    sharesInput:
+      primary: "#shares"
+      fallback:
+        - "input[name='shares']"
+        - "input[type='number']:first-of-type"
+    priceInput:
+      primary: "#price"
+      fallback:
+        - "input[name='price']"
+        - "input[type='number']:nth-of-type(2)"
+    tradingPasswordInput:
+      primary: "#tradingPassword"
+      fallback:
+        - "input[name='tradingPassword']"
+        - "input[name='confirmPassword']"
+        - "input[type='password']"
+    submitButton:
+      primary: "#submit-apply"
+      fallback:
+        - "button:has-text('申込実行')"
+        - "button[type='submit']"
+
+  applyResult:
+    successIndicator:
+      primary: ".apply-success"
+      fallback:
+        - "text=受け付けました"
+        - "text=申込完了"
+    duplicateIndicator:
+      primary: ".apply-duplicate"
+      fallback:
+        - "text=既に申込済み"
+    insufficientBalanceIndicator:
+      primary: ".apply-insufficient-balance"
+      fallback:
+        - "text=残高が不足"
+        - "text=残高不足"
+    failureIndicator:
+      primary: ".apply-error"
+      fallback:
+        - "[class*='error']"
+
+  # Phase 3 Sprint 7 — 抽選結果画面。テーブル行から data-stock-identifier を
+  # 使って対象銘柄を特定し、その行の .result-label を textContent で解釈する。
+  lotteryResult:
+    resultContainer:
+      primary: "#lottery-results"
+      fallback:
+        - "main:has-text('抽選結果')"
+    resultRow:
+      primary: "[data-stock-identifier]"
+      fallback:
+        - "tr[data-company-name]"
+    resultLabel:
+      primary: ".result-label"
+      fallback:
+        - "td.result"
+        - "span.status"

@@ -26,6 +26,16 @@ author: "lihs"
 
 ## 2. エンドポイント × 主要フィールド対応表
 
+### 2.0 サービス間 (ipo-api ↔ ipo-browser) の ACL 型 (Phase 3 Sprint 7)
+
+| 型 | Rust 側 | TypeScript 側 | serde 形式 |
+|---|---|---|---|
+| `ApplicationResult` | `ipo_backend_shared::acl::browser::ApplicationResult` | `services/ipo-browser/src/flows/apply.ts` の `ApplyResult` | `{"status": "success" \| "failure" \| "already_applied" \| "insufficient_balance", "reason"?: string}` |
+| `BrowserApplyRequest` | `services/ipo-api/src/infrastructure/browser_service_client.rs` | `services/ipo-browser/src/routes/lottery-applications.ts` の `SubmitLotteryApplicationRequest` | `{credential, stockIdentifier, companyName, shares, price}` camelCase |
+| `BrowserLotteryResultResponse` | `services/ipo-api/src/infrastructure/browser_service_client.rs` | `services/ipo-browser/src/routes/lottery-results.ts` | `{result: "Won"\|"Lost"\|"Alternate"\|null}` PascalCase |
+
+`acl.md` §3.5 の `translate_application_result` / `translate_lottery_result` 表を Rust / TypeScript 双方で忠実に移植し、`cargo test -p ipo-backend-shared --test api_contract` と `pnpm test apply-result-translator lottery-result-translator` で serde 固定 + キーワード分岐を回帰検知する。
+
 ### 2.1 参照系
 
 | API ID | メソッド / パス | 代表フィールド | 元になる domain 型 | use case 層での変換 | 備考 |
@@ -128,6 +138,8 @@ author: "lihs"
 | `FetchOrigin` | serde derive で `"ExternalSite"` / `"OfficialSite"` / `"Unknown"`、`as_str()` と一致 |
 | `LotteryResult` | `"Won"` / `"Lost"` / `"Alternate"` の roundtrip |
 | `ConnectionTestResult` | 成功レスポンスのフィールド構造 (success, message, tested_at) |
+| `ApplicationResult` (Phase 3 Sprint 7) | `{"status":"success"}` / `{"status":"failure","reason":...}` / `{"status":"already_applied"}` / `{"status":"insufficient_balance"}` の roundtrip |
+| `translate_application_result` (Phase 3 Sprint 7) | `"受け付けました"` / `"既に申込済み"` / `"残高"+"不足"` / 未知文字列 の 4 ブランチ。TS 版 `translateApplyResultText` と同キーワード |
 
 テスト実装後は `cargo test -p ipo-backend-shared --test api_contract` で個別に実行できる。
 

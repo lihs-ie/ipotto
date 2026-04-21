@@ -54,26 +54,7 @@ test.describe("ipo-browser Service Health Check", () => {
     expect(body).toEqual([]);
   });
 
-  test("lottery-results stub returns null result (Phase 3 Sprint 5.1)", async ({
-    request,
-  }) => {
-    const browserServiceUrl =
-      process.env["IPO_BROWSER_URL"] ?? "http://localhost:8081";
-    const response = await request.post(
-      `${browserServiceUrl}/internal/lottery-results/check`,
-      {
-        data: {
-          credential: {},
-          stockIdentifier: "01HA1234567890ABCDEFGHJKMN",
-        },
-      },
-    );
-    expect(response.ok()).toBeTruthy();
-    const body = await response.json();
-    expect(body).toEqual({ result: null });
-  });
-
-  test("lottery-results rejects missing stockIdentifier with 400", async ({
+  test("lottery-results rejects missing stockIdentifier with 400 (Phase 3 Sprint 7)", async ({
     request,
   }) => {
     const browserServiceUrl =
@@ -82,6 +63,26 @@ test.describe("ipo-browser Service Health Check", () => {
       `${browserServiceUrl}/internal/lottery-results/check`,
       {
         data: {},
+      },
+    );
+    expect(response.status()).toBe(400);
+  });
+
+  test("lottery-applications rejects missing credential fields with 400 (Phase 3 Sprint 7)", async ({
+    request,
+  }) => {
+    const browserServiceUrl =
+      process.env["IPO_BROWSER_URL"] ?? "http://localhost:8081";
+    const response = await request.post(
+      `${browserServiceUrl}/internal/lottery-applications/submit`,
+      {
+        data: {
+          stockIdentifier: "01HA1234567890ABCDEFGHJKMN",
+          companyName: "テスト第一株式会社",
+          shares: 100,
+          price: 1400,
+          credential: {},
+        },
       },
     );
     expect(response.status()).toBe(400);

@@ -1,10 +1,7 @@
 import { Router, type Request, type Response } from "express";
 
 import type { BrowserManager } from "../browser/manager.js";
-import {
-  rakutenCheckResult,
-  type CheckResultOutcome,
-} from "../flows/check-result.js";
+import { rakutenApply, type ApplyResult } from "../flows/apply.js";
 import { runImageAuthentication } from "../flows/image-auth/flow.js";
 import {
   rakutenLogin,
@@ -14,16 +11,18 @@ import {
 import { ImapMailReader } from "../mail/imap-reader.js";
 import type { NotificationPublisher } from "../notifications/publisher.js";
 
-// Phase 3 Sprint 7 — POST /internal/lottery-results/check.
-// Scrapes the Rakuten Securities lottery result page for a specific
-// stock and translates the label text into the LotteryResult enum
-// (Won / Lost / Alternate) or `null` when the result is not yet
-// published. The stub response shape `{ result: <value> | null }` is
-// preserved so both `ipo-api::BrowserServiceClient` and
-// `ipo-result-checker::BrowserServiceClient` continue to work without
-// contract changes.
+// Phase 3 Sprint 7 — POST /internal/lottery-applications/submit.
+// Carries out the full "login → (2FA) → navigate to apply list →
+// submit apply form → classify result" sequence against the Rakuten
+// Securities site (html-mock-server in CI / e2e). The ipo-api side's
+// `BrowserServiceClient::apply_for_ipo` calls this route with the
+// BrowserApplyRequest shape below and expects one of the four
+// ApplicationResult variants in return; failures and unrecognised
+// result pages publish an OperationErrorOccurred event to ipo-api's
+// notification dispatcher (SEV1), while `already_applied` stays a
+// normal-flow response.
 
-type LotteryResultCheckRequest = {
+type SubmitLotteryApplicationRequest = {
   credential: {
     loginId: string;
     loginPassword: string;
@@ -34,6 +33,9 @@ type LotteryResultCheckRequest = {
     imapPort: number;
   };
   stockIdentifier: string;
+  companyName: string;
+  shares: number;
+  price: number;
 };
 
 const credentialFields = [
@@ -46,31 +48,39 @@ const credentialFields = [
   "imapPort",
 ] as const;
 
+const topLevelFields = [
+  "stockIdentifier",
+  "companyName",
+  "shares",
+  "price",
+] as const;
+
 const MAIL_OTP_TIMEOUT_MS = 120_000;
 
-export function lotteryResultsRouter(
+export function lotteryApplicationsRouter(
   manager: BrowserManager,
   publisher: NotificationPublisher,
 ): Router {
   const router = Router();
 
   router.post(
-    "/internal/lottery-results/check",
+    "/internal/lottery-applications/submit",
     async (request: Request, response: Response) => {
-      const body = request.body as Partial<LotteryResultCheckRequest> | undefined;
+      const body = request.body as Partial<SubmitLotteryApplicationRequest> | undefined;
       const validationError = validate(body);
       if (validationError !== null) {
         response.status(400).json({
-          error: validationError,
+          status: "failure",
+          reason: validationError,
         });
         return;
       }
 
-      const validated = body as LotteryResultCheckRequest;
+      const validated = body as SubmitLotteryApplicationRequest;
       const mockServerUrl =
         process.env["MOCK_SERVER_URL"] ?? "http://html-mock-server:80";
       const loginPageUrl = `${mockServerUrl}/rakuten/login_page.html?e2e-bypass=1`;
-      const resultPageUrl = `${mockServerUrl}/rakuten/result_page.html`;
+      const applyListUrl = `${mockServerUrl}/rakuten/apply_list_page.html`;
       const twoFactorHandler = buildTwoFactorHandler(
         validated.credential,
         publisher,
@@ -87,48 +97,60 @@ export function lotteryResultsRouter(
         if (loginResult.status === "failure") {
           await publisher.publishOperationError({
             serviceName: "ipo-browser",
-            operationType: "check_lottery_result_login",
+            operationType: "application_submit_login",
             errorMessage: loginResult.reason,
           });
-          response.json({ result: null });
+          response.json({
+            status: "failure",
+            reason: loginResult.reason,
+            screenshotPath: loginResult.screenshotPath,
+          });
           return;
         }
 
-        const resultPage = await context.newPage();
+        const applyPage = await context.newPage();
         try {
-          const outcome: CheckResultOutcome = await rakutenCheckResult(
-            resultPage,
-            {
-              stockIdentifier: validated.stockIdentifier,
-              resultPageUrl,
-            },
-          );
-          if (outcome.status === "failure") {
+          const applyResult: ApplyResult = await rakutenApply(applyPage, {
+            stockIdentifier: validated.stockIdentifier,
+            companyName: validated.companyName,
+            shares: validated.shares,
+            price: validated.price,
+            tradingPassword: validated.credential.tradingPassword,
+            applyListUrl,
+          });
+
+          if (applyResult.status === "failure") {
             await publisher.publishOperationError({
               serviceName: "ipo-browser",
-              operationType: "check_lottery_result",
-              errorMessage: outcome.reason,
+              operationType: "application_submit",
+              errorMessage: applyResult.reason,
             });
-            response.json({ result: null });
-            return;
+          } else if (applyResult.status === "insufficient_balance") {
+            await publisher.publishOperationError({
+              serviceName: "ipo-browser",
+              operationType: "application_submit",
+              errorMessage: "broker site reported insufficient balance",
+            });
           }
-          response.json({ result: outcome.result });
+
+          response.json(applyResult);
         } finally {
-          await resultPage.close().catch(() => undefined);
+          await applyPage.close().catch(() => undefined);
         }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         console.error(
-          `lottery result check error (loginId=${validated.credential.loginId})`,
+          `lottery application submit error (loginId=${validated.credential.loginId})`,
           error,
         );
         await publisher.publishOperationError({
           serviceName: "ipo-browser",
-          operationType: "check_lottery_result",
+          operationType: "application_submit",
           errorMessage: `browser automation error: ${reason}`,
         });
         response.status(502).json({
-          error: `browser automation error: ${reason}`,
+          status: "failure",
+          reason: `browser automation error: ${reason}`,
         });
       }
     },
@@ -138,18 +160,27 @@ export function lotteryResultsRouter(
 }
 
 function validate(
-  body: Partial<LotteryResultCheckRequest> | undefined,
+  body: Partial<SubmitLotteryApplicationRequest> | undefined,
 ): string | null {
   if (body === undefined || body === null) {
     return "request body is required";
   }
-  if (
-    body.stockIdentifier === undefined ||
-    body.stockIdentifier === null ||
-    body.stockIdentifier === ""
-  ) {
-    return "stockIdentifier is required";
+
+  const missingTop = topLevelFields.filter((field) => {
+    const value = body[field];
+    return value === undefined || value === null || value === "";
+  });
+  if (missingTop.length > 0) {
+    return `missing fields: ${missingTop.join(", ")}`;
   }
+
+  if (typeof body.shares !== "number" || !Number.isFinite(body.shares) || body.shares <= 0) {
+    return "shares must be a positive number";
+  }
+  if (typeof body.price !== "number" || !Number.isFinite(body.price) || body.price < 0) {
+    return "price must be a non-negative number";
+  }
+
   const credential = body.credential;
   if (credential === undefined || credential === null) {
     return "credential is required";
@@ -161,11 +192,12 @@ function validate(
   if (missingCred.length > 0) {
     return `missing credential fields: ${missingCred.join(", ")}`;
   }
+
   return null;
 }
 
 function buildTwoFactorHandler(
-  credential: LotteryResultCheckRequest["credential"],
+  credential: SubmitLotteryApplicationRequest["credential"],
   publisher: NotificationPublisher,
 ): TwoFactorHandler {
   const cutoff = new Date();

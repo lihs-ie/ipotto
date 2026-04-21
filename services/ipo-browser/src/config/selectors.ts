@@ -28,10 +28,39 @@ export type RakutenImageAuthenticationSelectors = {
   errorMessage: SelectorDefinition;
 };
 
+export type RakutenApplyListSelectors = {
+  stockRow: SelectorDefinition;
+  applyButton: SelectorDefinition;
+};
+
+export type RakutenApplyFormSelectors = {
+  sharesInput: SelectorDefinition;
+  priceInput: SelectorDefinition;
+  tradingPasswordInput: SelectorDefinition;
+  submitButton: SelectorDefinition;
+};
+
+export type RakutenApplyResultSelectors = {
+  successIndicator: SelectorDefinition;
+  duplicateIndicator: SelectorDefinition;
+  insufficientBalanceIndicator: SelectorDefinition;
+  failureIndicator: SelectorDefinition;
+};
+
+export type RakutenLotteryResultSelectors = {
+  resultContainer: SelectorDefinition;
+  resultRow: SelectorDefinition;
+  resultLabel: SelectorDefinition;
+};
+
 export type SelectorTree = {
   rakuten: {
     login: RakutenLoginSelectors;
     imageAuthentication: RakutenImageAuthenticationSelectors;
+    applyList: RakutenApplyListSelectors;
+    applyForm: RakutenApplyFormSelectors;
+    applyResult: RakutenApplyResultSelectors;
+    lotteryResult: RakutenLotteryResultSelectors;
   };
 };
 

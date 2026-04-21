@@ -513,6 +513,12 @@ sequenceDiagram
 | 残高不足で申し込み不可 | BrowserOperationError | 該当銘柄をスキップし、エラーをログに記録 |
 | 除外リストの銘柄 | — | 正常系としてスキップ |
 
+#### 実装ノート (Phase 3 Sprint 7)
+
+- ブラウザ側 (`services/ipo-browser`) の HTTP 契約は `POST /internal/lottery-applications/submit` として提供される (Sprint 7.1 完了)。UseCase 本体 (`ApplyForLotteryUseCase`) と Pub/Sub handler は Phase 4 Sprint 8 で新 `ipo-applier` サービスとして実装する方針。ACL port (`BrokerBrowserPort::apply_for_ipo`) は `ipo-backend-shared` に追加済み、現時点では `ipo-api::BrowserServiceClient` のみが実装を override し、他サービスは default (error) を継承する。
+- **申込株数 / 価格の決定ロジック**: UseCase 側の決定式は `shares = max(100, offering.minimumShares)` / `price = stock.pricing.offerPrice ?? stock.pricing.priceRange.max` を初期案とする。単元株 (100株) を最低取得単位とし、公開価格が確定していない場合は想定価格帯の上限で申し込む（約定機会を最大化）。この規則は Phase 4 Sprint 8 で `ApplyForLotteryUseCase` 実装時に確定する。
+- **画像認証の 2FA 経路**: Sprint 6 の `rakutenLogin.twoFactorHandler` + `ImapMailReader` + `runImageAuthentication` を再利用する。実画面 (`docs/reference/2段階認証画面.html`) の `emojiClick` 形式 (charaWord 無) は matcher で解決できないため、Phase 4 以降に画像 OCR 経由のキーワード照合を追加する必要がある（現状は第 3 防御線の手動介入通知で縮退）。
+
 ---
 
 ### 10.3 DD-102: 抽選結果を自動確認する

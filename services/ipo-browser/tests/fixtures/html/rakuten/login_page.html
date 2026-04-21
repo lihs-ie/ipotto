@@ -1,12 +1,29 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head><meta charset="utf-8"><title>楽天証券 ログイン</title></head>
+<head>
+  <meta charset="utf-8" />
+  <title>楽天証券 ログイン</title>
+</head>
 <body>
   <h1>楽天証券 ログイン</h1>
-  <form id="login-form">
+  <form id="login-form" action="/rakuten/image_auth_page.html" method="get">
     <input type="text" name="loginid" id="loginid" placeholder="ログインID" />
     <input type="password" name="passwd" id="passwd" placeholder="パスワード" />
     <button type="submit">ログイン</button>
   </form>
+  <script>
+    (function () {
+      // e2e-bypass: smoke テストや Sprint 7 の申込 / 結果確認 e2e では
+      // 2FA 画面を通す前提が無いので、?e2e-bypass=1 が付いている時に
+      // 限り login form の submit 先を直接 apply_list_page.html に
+      // 書き換える。html-mock 内に閉じており、ipo-browser 本体コードは
+      // このクエリを見ない。
+      var params = new URLSearchParams(window.location.search);
+      if (params.get("e2e-bypass") === "1") {
+        var form = document.getElementById("login-form");
+        form.setAttribute("action", "/rakuten/apply_list_page.html");
+      }
+    })();
+  </script>
 </body>
 </html>
