@@ -7,11 +7,13 @@ COPY ipo-backend-shared/Cargo.toml ipo-backend-shared/Cargo.toml
 COPY ipo-api/Cargo.toml ipo-api/Cargo.toml
 COPY ipo-info-fetcher/Cargo.toml ipo-info-fetcher/Cargo.toml
 COPY ipo-result-checker/Cargo.toml ipo-result-checker/Cargo.toml
+COPY ipo-applier/Cargo.toml ipo-applier/Cargo.toml
 
 RUN mkdir -p ipo-backend-shared/src && echo "" > ipo-backend-shared/src/lib.rs \
     && mkdir -p ipo-api/src && echo "fn main() {}" > ipo-api/src/main.rs \
     && mkdir -p ipo-info-fetcher/src && echo "fn main() {}" > ipo-info-fetcher/src/main.rs \
-    && mkdir -p ipo-result-checker/src && echo "fn main() {}" > ipo-result-checker/src/main.rs
+    && mkdir -p ipo-result-checker/src && echo "fn main() {}" > ipo-result-checker/src/main.rs \
+    && mkdir -p ipo-applier/src && echo "fn main() {}" > ipo-applier/src/main.rs
 RUN cargo build --release --package ipo-result-checker
 
 COPY ipo-backend-shared/src ipo-backend-shared/src
