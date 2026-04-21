@@ -32,6 +32,7 @@ services:
       dockerfile: ../docker/ipo-browser/Dockerfile
     ports:
       - "8081:8081"
+    shm_size: "1gb"
     environment:
       - PORT=8081
       - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088

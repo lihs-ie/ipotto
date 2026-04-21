@@ -397,9 +397,9 @@ API-013 `POST /api/v1/accounts/{id}/test` の接続テストは ipo-browser + ht
 - **Phase 2 Sprint 4**: Email + LINE + Slack の 3 adapter 全てが `/internal/pubsub/ipo-notification` から実発火する end-to-end smoke を `docker-compose-smoke` に追加済。Sprint 4 完了 (M2 残タスクは API-013 接続テスト smoke のみ)。
 - **Phase 3 Sprint 5**: ipo-browser 楽天証券ログインフロー本体。
   - 5.1 Express/Fastify HTTP サーバー整備 ✅ 完了 (2026-04-21)。`src/server.ts` で `createApp()` factory を分離、`src/routes/` に health / `/internal/accounts/test` / `/internal/stocks` (stub) / `/internal/lottery-results/check` (stub) を module 化。e2e で 3 endpoint の stub 応答を verify。
-  - 5.2 Playwright ブラウザマネージャ (セッション永続化含む) 未着手。
-  - 5.3 楽天証券ログインフロー (セレクタ YAML 外部化 + フォールバック) 未着手。
-  - 5.4 セレクタ全失敗時のスクリーンショット差分アラート 未着手。
+  - 5.2 Playwright ブラウザマネージャ ✅ 完了 (2026-04-21)。`src/browser/manager.ts` で `launchPersistentContext` + session key (loginId) 単位の user data dir (`/tmp/ipo-browser-sessions/*`)、SIGTERM/SIGINT graceful shutdown。`docker-compose.yml` の ipo-browser に `shm_size: 1gb` 追加。
+  - 5.3 楽天証券ログインフロー ✅ 完了 (2026-04-21)。`src/config/selectors.yaml` に primary + fallback セレクタ定義、`src/config/selectors.ts` で js-yaml 経由読み込み、`src/flows/login.ts` が fallback チェーンを走査してログインフォーム操作。`/internal/accounts/test` を Playwright driven に置換し `docker-compose-smoke` で verify。
+  - 5.4 セレクタ全失敗時のスクリーンショット差分アラート — 最小実装完了 (2026-04-21)。セレクタ全失敗 / 例外発生時に `/tmp/ipo-browser-screenshots/` へスクリーンショットを保存し失敗 response に path を添付。baseline 比較 / アラート通知はフォロー PR に残す。
 - **Phase 5 Sprint 9〜11**: フロントエンド実装。API-001 〜 004 の型が凍結されたため着手可能。
 
 ---
@@ -418,3 +418,4 @@ API-013 `POST /api/v1/accounts/{id}/test` の接続テストは ipo-browser + ht
 | 2026-04-21 | Phase 2 Sprint 4 を LINE + Slack 実発火 smoke で完了。Sprint 3 の notification settings step で Email / LINE / Slack の 3 channel を ApplicationCompleted に subscribe 登録 (`channelCount == 3` assert)、Sprint 4 の publish で 3 adapter すべてが `notification-mock` の対応エンドポイントを叩く構成を 1 本の 204 で検証 |
 | 2026-04-21 | Phase 2 Sprint 3 Task 3.4 (API-013 接続テスト) 完了。ipo-browser の `src/index.ts` に `POST /internal/accounts/test` を追加 (credential バリデーション + html-mock-server 到達性チェック)。`docker-compose-smoke` で `/api/v1/accounts/{id}/test` が `success=true` を返すことを verify。**Phase 2 Sprint 3 全タスク完了 → M2 達成**。Phase 3 Sprint 5 で Playwright による実ログインフローに差し替え予定 |
 | 2026-04-21 | Phase 3 Sprint 5.1 HTTP サーバー整備を実施。`src/server.ts::createApp()` factory と `src/routes/{health,accounts,stocks,lottery-results}.ts` に module 分割、`/internal/stocks` (empty array stub) と `/internal/lottery-results/check` (null result stub) を追加。e2e (`health.spec.ts`) で 3 endpoint の stub 応答を固定化 |
+| 2026-04-21 | Phase 3 Sprint 5.2 / 5.3 / 5.4 (基礎) を実施。`BrowserManager` (launchPersistentContext + loginId キー session)、`src/flows/login.ts` (selectors.yaml 外部化 + primary/fallback チェーン + 失敗時 screenshot)、`/internal/accounts/test` を Playwright driven に置換。Dockerfile で `pnpm exec playwright install chromium chromium-headless-shell` に修正、docker-compose に `shm_size: 1gb`。`docker-compose-smoke` で API-013 smoke が Playwright 実ログインで 204 を返すことを verify |
