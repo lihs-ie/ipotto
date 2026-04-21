@@ -54,12 +54,15 @@ impl DependencyContainer {
         let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
             as Arc<dyn NotificationSettingRepository + Send + Sync>;
 
-        let line_adapter = Arc::new(LineNotificationAdapter::new(client.clone()))
-            as Arc<dyn NotificationPort + Send + Sync>;
-        let email_adapter = Arc::new(EmailNotificationAdapter::new(
+        let line_adapter = Arc::new(LineNotificationAdapter::new_with_endpoint(
+            client.clone(),
+            config::line_notify_endpoint(),
+        )) as Arc<dyn NotificationPort + Send + Sync>;
+        let email_adapter = Arc::new(EmailNotificationAdapter::new_with_endpoint(
             client.clone(),
             credential_store.clone(),
             config::notification_from_address(),
+            config::sendgrid_endpoint(),
         )) as Arc<dyn NotificationPort + Send + Sync>;
         let slack_adapter = Arc::new(SlackNotificationAdapter::new(client.clone()))
             as Arc<dyn NotificationPort + Send + Sync>;

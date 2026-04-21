@@ -14,12 +14,16 @@ services:
       - IPO_BROWSER_BASE_URL=http://ipo-browser:8081
       - IPO_NOTIFICATION_FROM_ADDRESS=no-reply@example.com
       - SENDGRID_API_KEY=test-sendgrid-key
+      - SENDGRID_ENDPOINT=http://notification-mock:80/sendgrid/mail/send
+      - LINE_NOTIFY_ENDPOINT=http://notification-mock:80/line/api/notify
       - ALLOWED_EMAIL=test@example.com
       - RUST_LOG=info
     depends_on:
       firebase-emulator:
         condition: service_healthy
       pubsub-emulator:
+        condition: service_started
+      notification-mock:
         condition: service_started
 
   ipo-browser:
@@ -129,3 +133,10 @@ services:
       - "8090:80"
     volumes:
       - ./services/ipo-browser/tests/fixtures/html:/usr/share/nginx/html:ro
+
+  notification-mock:
+    image: nginx:alpine
+    ports:
+      - "9190:80"
+    volumes:
+      - ./docker/notification-mock/nginx.conf:/etc/nginx/conf.d/default.conf:ro
