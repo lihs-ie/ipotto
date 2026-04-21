@@ -1,15 +1,29 @@
+use std::sync::Arc;
+
 use axum::{
+    middleware::from_fn_with_state,
     routing::{delete, get, post, put},
     Router,
 };
 use ipo_backend_shared::http::create_health_check_router;
 
-use crate::{infrastructure::DependencyContainer, presentation::handlers};
+use crate::{
+    infrastructure::DependencyContainer,
+    middleware::{firebase_auth_middleware, FirebaseTokenVerifier},
+    presentation::handlers,
+};
 
 /// Creates the API router.
-pub fn create_router(container: DependencyContainer) -> Router {
-    Router::<DependencyContainer>::new()
-        .merge(create_health_check_router::<DependencyContainer>())
+///
+/// Pass `Some(verifier)` (production) to enforce Firebase ID token
+/// verification on the `/api/v1/*` routes. Pass `None` in tests that exercise
+/// handlers directly without authentication setup; `/health` and
+/// `/internal/pubsub/*` stay unauthenticated in both cases.
+pub fn create_router(
+    container: DependencyContainer,
+    verifier: Option<Arc<FirebaseTokenVerifier>>,
+) -> Router {
+    let authenticated = Router::<DependencyContainer>::new()
         .route("/api/v1/stocks", get(handlers::stock_handlers::list_stocks))
         .route(
             "/api/v1/stocks/{stock_id}",
@@ -47,7 +61,18 @@ pub fn create_router(container: DependencyContainer) -> Router {
             "/api/v1/accounts/{account_id}/test",
             post(handlers::account_handlers::test_connection),
         )
-        .route("/api/v1/logs", get(handlers::log_handlers::list_logs))
+        .route("/api/v1/logs", get(handlers::log_handlers::list_logs));
+
+    let authenticated = match verifier {
+        Some(verifier) => {
+            authenticated.route_layer(from_fn_with_state(verifier, firebase_auth_middleware))
+        }
+        None => authenticated,
+    };
+
+    Router::<DependencyContainer>::new()
+        .merge(create_health_check_router::<DependencyContainer>())
+        .merge(authenticated)
         .route(
             "/internal/pubsub/ipo-info-updated",
             post(handlers::notification_handlers::handle_ipo_info_updated),
@@ -243,7 +268,7 @@ mod tests {
             .stock_repository()
             .save(&build_stock())
             .expect("save stock");
-        let app = create_router(container);
+        let app = create_router(container, None);
 
         let response = app
             .oneshot(
@@ -266,7 +291,7 @@ mod tests {
 
     #[tokio::test]
     async fn registers_exclusion_via_http() {
-        let app = create_router(DependencyContainer::new().expect("container"));
+        let app = create_router(DependencyContainer::new().expect("container"), None);
 
         let response = app
             .oneshot(
@@ -338,6 +363,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
         );
 
         let event = ApplicationCompleted {
@@ -453,6 +479,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
         );
 
         let event = ApplicationCompleted {
@@ -554,6 +581,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
         );
 
         let event = ApplicationCompleted {
@@ -672,6 +700,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
         );
 
         let stock = build_stock();
@@ -772,6 +801,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
         );
 
         let event = LotteryResultConfirmed {
@@ -869,6 +899,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
         );
 
         let stock = build_stock();
@@ -986,6 +1017,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
         );
 
         let event = LotteryResultConfirmed {
@@ -1063,6 +1095,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
         );
 
         let response = app
@@ -1146,6 +1179,7 @@ mod tests {
                 )),
             )
             .expect("container"),
+            None,
         );
 
         let response = app
