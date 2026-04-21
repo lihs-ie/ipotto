@@ -71,7 +71,8 @@ jobs:
             ipo-browser \
             ipo-api \
             ipo-info-fetcher \
-            ipo-result-checker
+            ipo-result-checker \
+            ipo-applier
           docker compose ps
 
       - name: Setup Pub/Sub emulator
