@@ -6,22 +6,25 @@
 </head>
 <body>
   <h1>楽天証券 ログイン</h1>
-  <form id="login-form" action="/rakuten/image_auth_page.html" method="get">
+  <form id="login-form">
     <input type="text" name="loginid" id="loginid" placeholder="ログインID" />
     <input type="password" name="passwd" id="passwd" placeholder="パスワード" />
     <button type="submit">ログイン</button>
   </form>
   <script>
     (function () {
-      // e2e-bypass: smoke テストや Sprint 7 の申込 / 結果確認 e2e では
-      // 2FA 画面を通す前提が無いので、?e2e-bypass=1 が付いている時に
-      // 限り login form の submit 先を直接 apply_list_page.html に
-      // 書き換える。html-mock 内に閉じており、ipo-browser 本体コードは
-      // このクエリを見ない。
+      // e2e-bypass: Sprint 7 の申込 / 結果確認フローでは 2FA 画面を
+      // 通す前提が無いので、?e2e-bypass=1 が付いている時のみ login form
+      // の submit 先を直接 apply_list_page.html に書き換える。未指定時は
+      // form に action が無いため、submit は現在 URL に GET で submit
+      // されて login_page に留まり、rakutenLogin 側は 2FA 画面が出ない
+      // 経路として成功扱いとなる (Sprint 6 の /internal/accounts/test
+      // smoke の既存挙動を維持)。
       var params = new URLSearchParams(window.location.search);
       if (params.get("e2e-bypass") === "1") {
         var form = document.getElementById("login-form");
         form.setAttribute("action", "/rakuten/apply_list_page.html");
+        form.setAttribute("method", "get");
       }
     })();
   </script>
