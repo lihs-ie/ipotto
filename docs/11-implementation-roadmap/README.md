@@ -354,27 +354,39 @@ Phase 6:                                         [■■■■■■]
 
 ---
 
-## 10. Phase 1 着手準備
+## 10. Phase 1 進行状況
 
-### 10.1 着手可能な次タスク
+### 10.1 Sprint 1 完了 (PR #17 / #18 / #19)
 
-develop の現状に照らすと、ロードマップの「未着手」として残るのは主に以下:
+| Task | 対応 PR / コミット | 備考 |
+|---|---|---|
+| 1.1 Firestore クライアントアダプタ | develop 既存 (`services/ipo-backend-shared/src/infrastructure/firestore/`) | PR #11 / #12 で実装済。5 集約分のリポジトリ実装 + 結合テスト。 |
+| 1.2 Secret Manager クライアントアダプタ | develop 既存 (`services/ipo-backend-shared/src/infrastructure/secrets/`) | `SecretName` VO + `CredentialStorePort` の in-memory 実装。 |
+| 1.3 Firebase Auth IDトークン検証ミドルウェア | PR #17 | JWK TTL キャッシュ、emulator モード、RS256 検証、401 mapping。 |
+| 1.4 メールホワイトリスト認可ミドルウェア | PR #18 | `ALLOWED_EMAIL` カンマ区切り複数対応、403 `EMAIL_NOT_ALLOWED` / `EMAIL_MISSING`。 |
+| 1.5 構造化ロギング + 機密情報マスキング | PR #19 | `ipo-backend-shared::logging` に mask helpers、`request_logging` middleware で uid / masked email / duration を span に。 |
 
-- **Phase 1 Sprint 1**:
-  - 1.3 Firebase Auth IDトークン検証ミドルウェア (ipo-api 側)
-  - 1.4 メールホワイトリスト認可ミドルウェア
-  - 1.5 構造化ロギング (機密情報マスキング)
-  - ※ 1.1 (Firestore クライアント) / 1.2 (Secret Manager) は `infrastructure/firestore` / `infrastructure/secrets` で既達。
-- **Phase 1 Sprint 2 参照系 API**:
-  - 実ハンドラは既に骨格が存在するため、Firebase Auth middleware 接続と permission チェック + エミュレータ結合テスト (`docker-compose-smoke` 内) の網羅が中心。
-- **Phase 3 Sprint 5**: ipo-browser のログインフロー本体。HTTP サーバー (`src/index.ts`) から `POST /login` まで未実装。
-- **Phase 5 全般**: ipo-frontend のページ実装、ipo-frontend-shared の Zod schema / Brand types。
+### 10.2 Sprint 2 M1 判定
 
-### 10.2 推奨着手順
+M1 の完了条件と、本スプリントで追加した客観的な担保:
 
-1. **Phase 1 Sprint 1 残タスク (1.3 / 1.4 / 1.5)** を先に片付けて M1 を確定 (参照系 API の挙動が GCP 認証込みで動く状態)。
-2. 並列で **Phase 3 Sprint 5 (ipo-browser ログイン)** を着手 (API 側に依存せずインタフェースのみ合意すれば進む)。
-3. Phase 5 の frontend 作業は **M1 完了後**に API-001 ~ 004 の型が凍結された段階で開始 (`ipo-frontend-shared` Zod schemas の根拠が揃う)。
+- [x] ipo-api の参照系エンドポイント (API-001 〜 004, 007, 009, 014) が Firestore エミュレータで動作
+  - `ci.yml: docker-compose-smoke` で `test@example.com` (allow-list メンバー) の emulator ID トークンを発行し、`/api/v1/stocks`・`/api/v1/dashboard`・`/api/v1/exclusions`・`/api/v1/notifications/settings`・`/api/v1/accounts`・`/api/v1/logs` が 200 を返し期待フィールドを含むことをアサート。
+- [x] Firebase Auth IDトークン認証ミドルウェア動作
+  - 匿名 `/api/v1/stocks` が 401 を返す (Task 1.3 の enforcement)。
+  - `mallory@example.com` の emulator IDトークンで `/api/v1/stocks` を叩くと 403 を返す (Task 1.4 の allow-list 拒否)。
+
+→ **M1 達成**。
+
+### 10.3 残タスク / 次のアクション
+
+- **Phase 0 発の後続 PR 候補** (Phase 1 着手前に可能なら):
+  - `docs(api-spec): fix market example and list all StockStatus values`
+  - `docs(api-spec): document supported eventType values for GET /logs`
+  - `fix(backend-shared): pick canonical serde form for OperationEventType and align as_str`
+- **Phase 2** (Sprint 3〜4): 操作系 API (API-005, 006, 008, 010〜012, 013) と通知ディスパッチ (`infrastructure/notification/*` は既存、結合は未検証)。
+- **Phase 3 Sprint 5**: ipo-browser のログインフロー本体。本スプリントと並列化可能。
+- **Phase 5 Sprint 9〜11**: フロントエンド実装。API-001 〜 004 の型が凍結されたため着手可能。
 
 ---
 
@@ -385,3 +397,4 @@ develop の現状に照らすと、ロードマップの「未着手」として
 | 2026-04-21 | 初版作成（Phase 0〜6 / 13スプリント構成） |
 | 2026-04-21 | 現状スナップショット (§2) を `origin/develop` ベースに更新。Phase 0 Task 0.1 が 80%+ 閾値到達目前、Phase 1 Sprint 1 / Phase 2 Sprint 4 / Phase 3 Sprint 6 の一部は実装済みである点を明記 |
 | 2026-04-21 | §9 Phase 0 検証ログ / §10 Phase 1 着手準備を追加。M0 達成を記録 (Task 0.1 ~ 0.4 完了)。後続 PR 3 件と Phase 1 着手推奨順を明記 |
+| 2026-04-21 | §10 を「Phase 1 進行状況」に差し替え。Sprint 1 (PR #17 / #18 / #19) と Sprint 2 (`docker-compose-smoke` で参照系 API 認証付き 200 / 401 / 403 の検証) の完了をもって **M1 達成**。残タスクに後続 PR 3 件 + Phase 2〜5 の着手候補を記載 |
