@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>新規公開株式（IPO）</title></head>
+<body>
+  <div class="pcmm_ipolt-ipo-lst">
+    <div id="dscr-0000" class="pcmm_ipolt-ipo-block">
+      <div class="pcmm_ipolt-ipo-block--left">
+        <div class="pcmm_ipolt-ipo-stock">
+          <div class="pcmm_ipolt-ipo-block__info">
+            <h3 class="pcmm-typo--heading-lv4">
+              <a class="pcmm_ipolt-ipo-block__stockname" href="javascript:void(0)">テスト株式会社</a>
+            </h3>
+          </div>
+        </div>
+      </div>
+      <div class="pcmm_ipolt-ipo-block--right">
+        <div class="pcmm_ipolt-ipo__btn-area pcmm--is-mt-8" id="button-area">
+          <button type="button" class="pcmm-btlk-normal pcmm--is-ph-8" id="apply-button">
+            <span class="pcmm-btlk__text">ブックビルディング申込</span>
+          </button>
+          <button type="button" class="pcmm-btlk-link pcmm--is-ph-8" id="detail-button">
+            <span class="pcmm-btlk__text">銘柄詳細を見る</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const url = new URL(window.location.href);
+    const scenario = url.searchParams.get("scenario") ?? "success";
+    const companyName = url.searchParams.get("companyName") ?? "テスト株式会社";
+    const stockName = document.querySelector(".pcmm_ipolt-ipo-block__stockname");
+    const applyButton = document.getElementById("apply-button");
+    const detailButton = document.getElementById("detail-button");
+
+    if (stockName !== null) {
+      stockName.textContent = companyName;
+    }
+
+    const navigateToScenario = () => {
+      switch (scenario) {
+        case "already_applied":
+          window.location.href = "./ipo_application_already_applied.html";
+          return;
+        case "insufficient_balance":
+          window.location.href = "./ipo_application_insufficient.html";
+          return;
+        case "failure":
+          window.location.href = "./ipo_application_page.html?scenario=failure";
+          return;
+        default:
+          window.location.href = "./ipo_application_page.html?scenario=success";
+      }
+    };
+
+    applyButton?.addEventListener("click", navigateToScenario);
+    detailButton?.addEventListener("click", navigateToScenario);
+
+    if (scenario === "already_applied") {
+      applyButton?.remove();
+      if (detailButton !== null) {
+        detailButton.querySelector(".pcmm-btlk__text").textContent = "申込詳細を見る";
+      }
+    }
+  </script>
+</body>
+</html>

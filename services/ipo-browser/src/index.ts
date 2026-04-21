@@ -1,14 +1,9 @@
-import express from "express";
+import { readAppConfig } from "./infrastructure/config/app-config.js";
+import { createApp } from "./server.js";
 
-const app = express();
-const port = parseInt(process.env["PORT"] ?? "8081", 10);
+const config = readAppConfig();
+const app = createApp();
 
-app.use(express.json());
-
-app.get("/health", (_request, response) => {
-  response.json({ status: "ok" });
-});
-
-app.listen(port, "0.0.0.0", () => {
-  console.log(`ipo-browser listening on port ${port}`);
+app.listen(config.port, "0.0.0.0", () => {
+  console.log(`ipo-browser listening on port ${config.port}`);
 });

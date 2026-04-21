@@ -8,5 +8,27 @@
     <input type="password" name="passwd" id="passwd" placeholder="パスワード" />
     <button type="submit">ログイン</button>
   </form>
+  <p data-role="error-message" hidden></p>
+  <script>
+    const form = document.getElementById("login-form");
+    const errorMessage = document.querySelector("[data-role='error-message']");
+    form?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const loginId = document.getElementById("loginid")?.value ?? "";
+      const password = document.getElementById("passwd")?.value ?? "";
+      if (loginId === "" || password === "") {
+        errorMessage.hidden = false;
+        errorMessage.textContent = "ログインIDとパスワードを入力してください";
+        return;
+      }
+      const currentUrl = new URL(window.location.href);
+      const auth = currentUrl.searchParams.get("auth");
+      if (auth === "image") {
+        window.location.href = "./image_authentication_page.html";
+        return;
+      }
+      window.location.href = "./dashboard.html";
+    });
+  </script>
 </body>
 </html>

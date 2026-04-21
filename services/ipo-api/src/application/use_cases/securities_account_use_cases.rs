@@ -324,3 +324,102 @@ fn mask_mail_address(value: &str) -> String {
     }
     format!("{}@{}", mask_value(local), domain)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use chrono::{TimeZone, Utc};
+    use ipo_backend_shared::{
+        acl::browser::BrokerBrowserPort,
+        domain::{
+            account::{ConnectionTestResult, SecuritiesAccountRepository, SecuritiesCompany},
+            stock::IpoStock,
+        },
+        errors::DomainError,
+        infrastructure::{
+            firestore::repositories::FirestoreSecuritiesAccountRepository,
+            secrets::InMemoryCredentialStore,
+        },
+    };
+
+    use super::{
+        ListSecuritiesAccountsUseCase, RegisterSecuritiesAccountInput,
+        RegisterSecuritiesAccountUseCase, TestSecuritiesAccountConnectionUseCase,
+    };
+
+    #[derive(Debug)]
+    struct DummyBrowserPort;
+
+    #[async_trait]
+    impl BrokerBrowserPort for DummyBrowserPort {
+        async fn fetch_ipo_stocks(
+            &self,
+        ) -> Result<Vec<ipo_backend_shared::acl::scraping::ScrapedStock>, DomainError> {
+            Ok(Vec::new())
+        }
+
+        async fn test_connection(
+            &self,
+            _credential: &ipo_backend_shared::domain::account::AccountCredential,
+        ) -> Result<ConnectionTestResult, DomainError> {
+            Ok(ConnectionTestResult::new(
+                true,
+                "ok",
+                Utc.with_ymd_and_hms(2026, 4, 13, 9, 0, 0)
+                    .single()
+                    .expect("tested at"),
+            ))
+        }
+
+        async fn check_lottery_result(
+            &self,
+            _credential: &ipo_backend_shared::domain::account::AccountCredential,
+            _stock: &IpoStock,
+        ) -> Result<Option<ipo_backend_shared::domain::application::LotteryResult>, DomainError>
+        {
+            Ok(None)
+        }
+    }
+
+    fn register_input() -> RegisterSecuritiesAccountInput {
+        RegisterSecuritiesAccountInput {
+            securities_company: SecuritiesCompany::Rakuten.as_str().to_string(),
+            login_id: "login".to_string(),
+            login_password: "password".to_string(),
+            trading_password: "1234".to_string(),
+            mail_address: "test@example.com".to_string(),
+            mail_password: "mail-password".to_string(),
+            imap_host: "imap.example.com".to_string(),
+            imap_port: 993,
+        }
+    }
+
+    #[tokio::test]
+    async fn registers_lists_and_tests_accounts() {
+        let store = InMemoryCredentialStore::new();
+        let repository = Arc::new(FirestoreSecuritiesAccountRepository::new(store))
+            as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
+        let registered = RegisterSecuritiesAccountUseCase::new(repository.clone())
+            .execute(register_input())
+            .expect("register");
+
+        let listed = ListSecuritiesAccountsUseCase::new(repository.clone())
+            .execute()
+            .expect("list");
+        assert_eq!(listed.total_count, 1);
+        assert_eq!(listed.items[0].securities_company, "Rakuten");
+        assert_eq!(listed.items[0].login_id, "log***");
+        assert_eq!(listed.items[0].mail_address, "tes***@example.com");
+
+        let output =
+            TestSecuritiesAccountConnectionUseCase::new(repository, Arc::new(DummyBrowserPort))
+                .execute(&registered.identifier)
+                .await
+                .expect("test connection");
+
+        assert!(output.success);
+        assert_eq!(output.message, "ok");
+    }
+}

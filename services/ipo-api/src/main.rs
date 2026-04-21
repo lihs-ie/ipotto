@@ -16,3 +16,14 @@ async fn main() {
         .await
         .unwrap_or_else(|error| panic!("failed to run http service: {error}"));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::config::HTTP_SERVICE_CONFIG;
+
+    #[test]
+    fn uses_the_expected_http_service_configuration() {
+        assert_eq!(HTTP_SERVICE_CONFIG.service_name(), "ipo-api");
+        assert_eq!(HTTP_SERVICE_CONFIG.default_port(), 8080);
+    }
+}

@@ -9,6 +9,9 @@ node_modules/
 .next/
 dist/
 
+# Local reference HTML
+docs/reference/
+
 # Test / Coverage
 lcov.info
 test-results/

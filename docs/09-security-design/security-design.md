@@ -167,6 +167,13 @@ sequenceDiagram
 | **内部** | IPO銘柄情報 | Firestore | 認証済みユーザーのみアクセス可能 |
 | **内部** | 操作ログ | Firestore | 認証済みユーザーのみ参照可能。システムのみ書き込み可能 |
 
+### 5.2.1 DD-101 の秘密情報取り扱い方針
+
+- Secret Manager から取得した credential はログ出力しない
+- `OperationLog.errorMessage` や外部通知 payload には credential 値を含めない
+- Secret payload parse failure 時も raw payload をエラーに含めない
+- ローカル調査用の `docs/reference/` 配下 HTML と実画面 dump は Git に含めない
+
 ### 5.3 Secret Managerアクセス制御
 
 ```mermaid

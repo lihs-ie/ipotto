@@ -472,3 +472,161 @@ fn lottery_result_to_string(value: LotteryResult) -> String {
         LotteryResult::Alternate => "Alternate".to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use chrono::{NaiveDate, TimeZone, Utc};
+    use ipo_backend_shared::{
+        domain::{
+            account::{
+                AccountCredential, ImapHost, ImapPort, LoginId, LoginPassword, MailAddress,
+                MailCredential, MailPassword, SecuritiesAccount, SecuritiesAccountRepository,
+                SecuritiesCompany, TradingPassword,
+            },
+            stock::{
+                BookBuildingPeriod, CompanyName, CompanyProfile, FetchOrigin, Industry,
+                IpoOffering, IpoPricing, IpoSchedule, IpoStock, IpoStockRepository,
+                LeadUnderwriter, Market, MetaSource, PriceRange, Shares, StockStatus, TickerSymbol,
+                Yen,
+            },
+        },
+        errors::DomainError,
+        infrastructure::{
+            firestore::repositories::{
+                FirestoreIpoStockRepository, FirestoreLotteryApplicationRepository,
+                FirestoreSecuritiesAccountRepository,
+            },
+            secrets::InMemoryCredentialStore,
+        },
+    };
+
+    use super::{
+        GetDashboardSummaryUseCase, GetIpoStockInput, GetIpoStockUseCase, ListIpoStocksInput,
+        ListIpoStocksUseCase,
+    };
+
+    fn build_stock() -> IpoStock {
+        IpoStock::create(
+            CompanyProfile::new(
+                CompanyName::new("テスト株式会社").expect("company"),
+                Some(TickerSymbol::new("1234").expect("ticker")),
+                Market::Growth,
+                Industry::new("情報・通信業").expect("industry"),
+            )
+            .expect("profile"),
+            IpoSchedule::new(
+                BookBuildingPeriod::new(
+                    NaiveDate::from_ymd_opt(2026, 4, 1).expect("start"),
+                    NaiveDate::from_ymd_opt(2026, 4, 10).expect("end"),
+                )
+                .expect("period"),
+                NaiveDate::from_ymd_opt(2026, 4, 15).expect("lottery"),
+                NaiveDate::from_ymd_opt(2026, 4, 25).expect("listing"),
+            )
+            .expect("schedule"),
+            IpoPricing::new(
+                PriceRange::new(Yen::new(1200).expect("min"), Yen::new(1500).expect("max"))
+                    .expect("range"),
+                Some(Yen::new(1400).expect("offer")),
+            )
+            .expect("pricing"),
+            IpoOffering::new(
+                LeadUnderwriter::new("楽天証券").expect("underwriter"),
+                Shares::new(100000).expect("shares"),
+            )
+            .expect("offering"),
+            StockStatus::Eligible,
+            MetaSource::new(
+                FetchOrigin::ExternalSite,
+                Utc.with_ymd_and_hms(2026, 3, 25, 9, 30, 0)
+                    .single()
+                    .expect("fetched at"),
+            ),
+        )
+        .expect("stock")
+    }
+
+    fn build_account() -> SecuritiesAccount {
+        SecuritiesAccount::create(
+            SecuritiesCompany::Rakuten,
+            AccountCredential::new(
+                LoginId::new("login").expect("login"),
+                LoginPassword::new("password").expect("password"),
+                TradingPassword::new("1234").expect("trading"),
+                MailCredential::new(
+                    MailAddress::new("test@example.com").expect("mail"),
+                    MailPassword::new("mail-password").expect("mail password"),
+                    ImapHost::new("imap.example.com").expect("host"),
+                    ImapPort::new(993).expect("port"),
+                )
+                .expect("mail credential"),
+            )
+            .expect("credential"),
+        )
+        .expect("account")
+    }
+
+    #[test]
+    fn lists_stocks_and_validates_status_filters() {
+        let repository = Arc::new(FirestoreIpoStockRepository::new())
+            as Arc<dyn IpoStockRepository + Send + Sync>;
+        repository.save(&build_stock()).expect("save");
+
+        let output = ListIpoStocksUseCase::new(repository.clone())
+            .execute(ListIpoStocksInput {
+                status_filter: Some("Eligible".to_string()),
+            })
+            .expect("list");
+        assert_eq!(output.total_count, 1);
+
+        let error = ListIpoStocksUseCase::new(repository)
+            .execute(ListIpoStocksInput {
+                status_filter: Some("Nope".to_string()),
+            })
+            .expect_err("invalid status");
+        assert!(matches!(error, DomainError::ValidationError { .. }));
+    }
+
+    #[test]
+    fn returns_not_found_for_missing_stock_and_builds_dashboard_summary() {
+        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+            as Arc<dyn IpoStockRepository + Send + Sync>;
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+            as Arc<
+                dyn ipo_backend_shared::domain::application::LotteryApplicationRepository
+                    + Send
+                    + Sync,
+            >;
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+            InMemoryCredentialStore::new(),
+        )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
+        account_repository
+            .save(&build_account())
+            .expect("save account");
+
+        let error = GetIpoStockUseCase::new(
+            stock_repository.clone(),
+            application_repository.clone(),
+            account_repository.clone(),
+        )
+        .execute(GetIpoStockInput {
+            stock_identifier: ipo_backend_shared::domain::stock::StockIdentifier::generate()
+                .value()
+                .to_string(),
+        })
+        .expect_err("missing stock");
+        assert!(matches!(error, DomainError::NotFound { .. }));
+
+        let dashboard = GetDashboardSummaryUseCase::new(
+            stock_repository,
+            application_repository,
+            account_repository,
+        )
+        .execute()
+        .expect("dashboard");
+        assert!(dashboard.recent_activities.is_empty());
+        assert_eq!(dashboard.system_status.accounts.len(), 1);
+    }
+}

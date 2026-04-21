@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>楽天証券 IPO申し込み</title></head>
+<body data-page="ipo-application">
+  <input type="hidden" id="ratPageName" value="[member]/app/ipo_jp_join_input.do" />
+  <h1>IPO申し込み</h1>
+  <form id="application-form">
+    <input type="number" id="shares" placeholder="株数" />
+    <input type="number" id="price" placeholder="価格" />
+    <input type="password" id="trading-password" placeholder="取引暗証番号" />
+    <button type="button" id="confirm-button">確認</button>
+  </form>
+  <p data-role="error-message" hidden></p>
+  <script>
+    const errorMessage = document.querySelector("[data-role='error-message']");
+    document.getElementById("confirm-button")?.addEventListener("click", () => {
+      const url = new URL(window.location.href);
+      const scenario = url.searchParams.get("scenario") ?? "success";
+      window.location.href = `./ipo_application_confirm.html?scenario=${encodeURIComponent(scenario)}`;
+    });
+  </script>
+</body>
+</html>
