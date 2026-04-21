@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    middleware::from_fn_with_state,
+    middleware::{from_fn, from_fn_with_state},
     routing::{delete, get, post, put},
     Router,
 };
@@ -10,8 +10,8 @@ use ipo_backend_shared::http::create_health_check_router;
 use crate::{
     infrastructure::DependencyContainer,
     middleware::{
-        email_allowlist_middleware, firebase_auth_middleware, EmailAllowlistConfig,
-        FirebaseTokenVerifier,
+        email_allowlist_middleware, firebase_auth_middleware, request_logging_middleware,
+        EmailAllowlistConfig, FirebaseTokenVerifier,
     },
     presentation::handlers,
 };
@@ -69,9 +69,12 @@ pub fn create_router(
         .route("/api/v1/logs", get(handlers::log_handlers::list_logs));
 
     // Axum's `route_layer` registers layers in "outside-first" order, so the
-    // last one added is the outermost. We want `firebase_auth_middleware` to
-    // run before `email_allowlist_middleware`, so the allow-list layer is
-    // added first and the Firebase layer second.
+    // last one added is the outermost. The intended request pipeline on
+    // authenticated routes is:
+    //     firebase_auth → email_allowlist → request_logging → handler
+    // so we add them in the reverse order: logging first (innermost), then
+    // the allow-list, then the Firebase verifier.
+    let authenticated = authenticated.route_layer(from_fn(request_logging_middleware));
     let authenticated = match allowlist {
         Some(allowlist) => {
             authenticated.route_layer(from_fn_with_state(allowlist, email_allowlist_middleware))

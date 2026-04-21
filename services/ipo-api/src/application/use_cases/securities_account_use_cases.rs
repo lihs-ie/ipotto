@@ -8,6 +8,7 @@ use ipo_backend_shared::{
         SecuritiesAccountRepository, SecuritiesCompany, TradingPassword,
     },
     errors::DomainError,
+    logging::{mask_email, mask_prefix},
 };
 use serde::{Deserialize, Serialize};
 
@@ -289,8 +290,8 @@ fn account_to_output(account: &SecuritiesAccount) -> SecuritiesAccountOutput {
     SecuritiesAccountOutput {
         identifier: account.identifier().value().to_string(),
         securities_company: account.securities_company().as_str().to_string(),
-        login_id: mask_value(account.credential().login_id().value()),
-        mail_address: mask_mail_address(
+        login_id: mask_prefix(account.credential().login_id().value()),
+        mail_address: mask_email(
             account
                 .credential()
                 .mail_credential()
@@ -308,19 +309,4 @@ fn connection_test_to_output(result: &ConnectionTestResult) -> ConnectionTestOut
         message: result.message().to_string(),
         tested_at: result.tested_at().to_rfc3339(),
     }
-}
-
-fn mask_value(value: &str) -> String {
-    let prefix = value.chars().take(3).collect::<String>();
-    format!("{prefix}***")
-}
-
-fn mask_mail_address(value: &str) -> String {
-    let mut parts = value.split('@');
-    let local = parts.next().unwrap_or_default();
-    let domain = parts.next().unwrap_or_default();
-    if domain.is_empty() {
-        return mask_value(value);
-    }
-    format!("{}@{}", mask_value(local), domain)
 }
