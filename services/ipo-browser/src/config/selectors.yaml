@@ -20,3 +20,32 @@ rakuten:
       fallback:
         - "form#login-form button"
         - "button:has-text('ログイン')"
+
+  # Phase 3 Sprint 6 — 2FA 画像認証画面 (image auth) の DOM 構造。
+  # 実画面は alt 属性付きの画像ボタンが複数並び、メールで届く
+  # "keyword1 + keyword2" のキーワードに対応する 2 つのボタンを順に
+  # クリックして送信する形式。
+  imageAuthentication:
+    container:
+      primary: "#image-auth-container"
+      fallback:
+        - "main div:has(button img[alt])"
+    imageButtons:
+      primary: "#image-buttons button"
+      fallback:
+        - "button:has(img[alt])"
+    imageElement:
+      primary: "img[alt]"
+    submitButton:
+      primary: "#submit-button"
+      fallback:
+        - "button[type='submit']"
+        - "button:has-text('確認')"
+    successIndicator:
+      primary: "#auth-success"
+      fallback:
+        - "[class*='success']"
+    errorMessage:
+      primary: "#auth-error"
+      fallback:
+        - "[class*='error']"
