@@ -111,4 +111,44 @@ mod tests {
         fs::create_dir_all(storage.get_user_data_directory(&account_id)).expect("mkdir");
         assert!(storage.session_exists(&account_id));
     }
+
+    #[test]
+    fn cleanup_returns_zero_when_base_directory_absent() {
+        let temp = tempdir().expect("tempdir");
+        let absent = temp.path().join("missing");
+        let storage = BrowserSessionStorage::new(&absent);
+        let deleted = storage
+            .cleanup_expired_sessions(1)
+            .expect("cleanup ok on missing base directory");
+        assert_eq!(deleted, 0);
+    }
+
+    #[test]
+    fn cleanup_removes_session_directories_older_than_threshold() {
+        let temp = tempdir().expect("tempdir");
+        let storage = BrowserSessionStorage::new(temp.path());
+        let account_id = SecuritiesAccountIdentifier::generate();
+        let session_directory = storage.get_user_data_directory(&account_id);
+        fs::create_dir_all(&session_directory).expect("mkdir");
+
+        let deleted = storage
+            .cleanup_expired_sessions(0)
+            .expect("cleanup succeeds with zero threshold");
+        assert_eq!(deleted, 1);
+        assert!(!session_directory.exists());
+    }
+
+    #[test]
+    fn cleanup_skips_non_directory_entries() {
+        let temp = tempdir().expect("tempdir");
+        let storage = BrowserSessionStorage::new(temp.path());
+        let file_path = temp.path().join("stray.txt");
+        fs::write(&file_path, b"orphan").expect("write stray file");
+
+        let deleted = storage
+            .cleanup_expired_sessions(0)
+            .expect("cleanup succeeds when only files exist");
+        assert_eq!(deleted, 0);
+        assert!(file_path.exists());
+    }
 }

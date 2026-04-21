@@ -38,3 +38,24 @@ impl ReqwestClientFactory {
             })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{HttpClientConfig, ReqwestClientFactory};
+
+    #[test]
+    fn builds_client_with_keep_alive_enabled() {
+        let config = HttpClientConfig::new(5_000, 15_000, 8, true);
+        let factory = ReqwestClientFactory::new(config);
+        let result = factory.build();
+        assert!(result.is_ok(), "expected client build to succeed");
+    }
+
+    #[test]
+    fn builds_client_with_keep_alive_disabled() {
+        let config = HttpClientConfig::new(1_000, 2_000, 1, false);
+        let factory = ReqwestClientFactory::new(config);
+        let result = factory.build();
+        assert!(result.is_ok(), "expected client build to succeed");
+    }
+}
