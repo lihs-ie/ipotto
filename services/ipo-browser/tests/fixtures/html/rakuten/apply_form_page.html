@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>楽天証券 IPO 申込フォーム</title>
+</head>
+<body>
+  <h1>IPO 申込フォーム</h1>
+  <form id="apply-form" action="/rakuten/apply_success_page.html" method="get">
+    <label for="shares">申込株数</label>
+    <input type="number" id="shares" name="shares" min="100" step="100" required />
+
+    <label for="price">申込価格 (円)</label>
+    <input type="number" id="price" name="price" min="100" step="1" required />
+
+    <label for="tradingPassword">取引パスワード</label>
+    <input type="password" id="tradingPassword" name="tradingPassword" />
+
+    <button type="submit" id="submit-apply">申込実行</button>
+  </form>
+  <script>
+    (function () {
+      // stockIdentifier の prefix に応じて遷移先を振り分けることで、
+      // apply.ts の classifyResultPage が扱う 4 ケース (success /
+      // already_applied / insufficient_balance / failure) を e2e で
+      // 網羅できるようにする。実サイトでの挙動を模した仕組みであり、
+      // アプリコード側には同等の分岐は存在しない（html-mock 内閉じ）。
+      var routingTable = {
+        "01HA": "/rakuten/apply_success_page.html",
+        "01HB": "/rakuten/apply_duplicate_page.html",
+        "01HC": "/rakuten/apply_insufficient_balance_page.html",
+        "01HD": "/rakuten/apply_failure_page.html",
+      };
+      var params = new URLSearchParams(window.location.search);
+      var stockIdentifier = params.get("stockIdentifier") || "";
+      var form = document.getElementById("apply-form");
+      var destination = "/rakuten/apply_success_page.html";
+      for (var prefix in routingTable) {
+        if (stockIdentifier.indexOf(prefix) === 0) {
+          destination = routingTable[prefix];
+          break;
+        }
+      }
+      form.setAttribute("action", destination);
+    })();
+  </script>
+</body>
+</html>

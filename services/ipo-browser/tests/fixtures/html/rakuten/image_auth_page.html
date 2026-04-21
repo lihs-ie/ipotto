@@ -5,49 +5,126 @@
   <title>楽天証券 画像認証</title>
 </head>
 <body>
-  <div id="image-auth-container">
-    <h1>画像認証</h1>
-    <p id="prompt">表示されたキーワードに対応する 2 つの画像を選択してください。</p>
-    <div id="image-buttons">
-      <!--
-        alt 属性は Playwright 側の matcher で keyword と突き合わせる。
-        楽天証券の実認証画面が 9〜10 個の画像から 2 個を選ばせる形式なので
-        同等の密度の fixture を用意。
-      -->
-      <button id="img-0" type="button" data-index="0">
-        <img src="/rakuten/assets/dummy.png" alt="みかん" />
-      </button>
-      <button id="img-1" type="button" data-index="1">
-        <img src="/rakuten/assets/dummy.png" alt="りんご" />
-      </button>
-      <button id="img-2" type="button" data-index="2">
-        <img src="/rakuten/assets/dummy.png" alt="ぶどう" />
-      </button>
-      <button id="img-3" type="button" data-index="3">
-        <img src="/rakuten/assets/dummy.png" alt="いちご" />
-      </button>
-      <button id="img-4" type="button" data-index="4">
-        <img src="/rakuten/assets/dummy.png" alt="ばなな" />
-      </button>
-      <button id="img-5" type="button" data-index="5">
-        <img src="/rakuten/assets/dummy.png" alt="すいか" />
-      </button>
-      <button id="img-6" type="button" data-index="6">
-        <img src="/rakuten/assets/dummy.png" alt="めろん" />
-      </button>
-      <button id="img-7" type="button" data-index="7">
-        <img src="/rakuten/assets/dummy.png" alt="さくらんぼ" />
-      </button>
-      <button id="img-8" type="button" data-index="8">
-        <img src="/rakuten/assets/dummy.png" alt="もも" />
-      </button>
-      <button id="img-9" type="button" data-index="9">
-        <img src="/rakuten/assets/dummy.png" alt="なし" />
-      </button>
+  <!--
+    docs/reference/2段階認証画面.html に寄せた構造:
+      - form[name='SotpLoginForOtherChannelForm'] 配下
+      - hidden input selectImageNo1 / selectImageNo2 / eventType
+      - 各ボタンは emojiAltClick(id, index, src, charaWord) を onclick に持ち、
+        alt 属性は img tag にも重ねて付与 (matcher の alt → onclick charaWord
+        2 段解決の両経路を同時に検証するため)
+      - submit は <input type="button"> で check() を呼び、check() 内で
+        eventType='checkBySetup' を設定して form.submit() する実画面と同じ挙動
+  -->
+  <form name="SotpLoginForOtherChannelForm" method="post" action="/rakuten/image_auth_result_page.html">
+    <input type="hidden" name="selectImageNo1" value="" />
+    <input type="hidden" name="selectImageNo2" value="" />
+    <input type="hidden" name="eventType" value="" />
+
+    <div id="image-auth-container">
+      <h1>画像認証</h1>
+      <p id="prompt">表示されたキーワードに対応する 2 つの画像を選択してください。</p>
+      <div id="image-buttons">
+        <button
+          id="emoji_0"
+          type="button"
+          class="pcmm_emoji-img"
+          data-index="0"
+          onclick="emojiAltClick('emoji_0', 0, '/rakuten/assets/dummy.png', 'みかん')"
+        >
+          <img src="/rakuten/assets/dummy.png" alt="みかん" />
+        </button>
+        <button
+          id="emoji_1"
+          type="button"
+          class="pcmm_emoji-img"
+          data-index="1"
+          onclick="emojiAltClick('emoji_1', 1, '/rakuten/assets/dummy.png', 'りんご')"
+        >
+          <img src="/rakuten/assets/dummy.png" alt="りんご" />
+        </button>
+        <button
+          id="emoji_2"
+          type="button"
+          class="pcmm_emoji-img"
+          data-index="2"
+          onclick="emojiAltClick('emoji_2', 2, '/rakuten/assets/dummy.png', 'ぶどう')"
+        >
+          <img src="/rakuten/assets/dummy.png" alt="ぶどう" />
+        </button>
+        <button
+          id="emoji_3"
+          type="button"
+          class="pcmm_emoji-img"
+          data-index="3"
+          onclick="emojiAltClick('emoji_3', 3, '/rakuten/assets/dummy.png', 'いちご')"
+        >
+          <img src="/rakuten/assets/dummy.png" alt="いちご" />
+        </button>
+        <button
+          id="emoji_4"
+          type="button"
+          class="pcmm_emoji-img"
+          data-index="4"
+          onclick="emojiAltClick('emoji_4', 4, '/rakuten/assets/dummy.png', 'ばなな')"
+        >
+          <img src="/rakuten/assets/dummy.png" alt="ばなな" />
+        </button>
+        <button
+          id="emoji_5"
+          type="button"
+          class="pcmm_emoji-img"
+          data-index="5"
+          onclick="emojiAltClick('emoji_5', 5, '/rakuten/assets/dummy.png', 'すいか')"
+        >
+          <img src="/rakuten/assets/dummy.png" alt="すいか" />
+        </button>
+        <button
+          id="emoji_6"
+          type="button"
+          class="pcmm_emoji-img"
+          data-index="6"
+          onclick="emojiAltClick('emoji_6', 6, '/rakuten/assets/dummy.png', 'めろん')"
+        >
+          <img src="/rakuten/assets/dummy.png" alt="めろん" />
+        </button>
+        <button
+          id="emoji_7"
+          type="button"
+          class="pcmm_emoji-img"
+          data-index="7"
+          onclick="emojiAltClick('emoji_7', 7, '/rakuten/assets/dummy.png', 'さくらんぼ')"
+        >
+          <img src="/rakuten/assets/dummy.png" alt="さくらんぼ" />
+        </button>
+        <button
+          id="emoji_8"
+          type="button"
+          class="pcmm_emoji-img"
+          data-index="8"
+          onclick="emojiAltClick('emoji_8', 8, '/rakuten/assets/dummy.png', 'もも')"
+        >
+          <img src="/rakuten/assets/dummy.png" alt="もも" />
+        </button>
+        <button
+          id="emoji_9"
+          type="button"
+          class="pcmm_emoji-img"
+          data-index="9"
+          onclick="emojiAltClick('emoji_9', 9, '/rakuten/assets/dummy.png', 'なし')"
+        >
+          <img src="/rakuten/assets/dummy.png" alt="なし" />
+        </button>
+      </div>
+      <input
+        id="submit-button"
+        class="pcmm_emoji-btn__primary"
+        type="button"
+        value="確認"
+        onclick="document.forms['SotpLoginForOtherChannelForm'].eventType.value='checkBySetup'; document.forms['SotpLoginForOtherChannelForm'].submit();"
+      />
+      <div id="auth-success" hidden>認証成功</div>
+      <div id="auth-error" hidden>認証に失敗しました</div>
     </div>
-    <button id="submit-button" type="submit">確認</button>
-    <div id="auth-success" hidden>認証成功</div>
-    <div id="auth-error" hidden>認証に失敗しました</div>
-  </div>
+  </form>
 </body>
 </html>

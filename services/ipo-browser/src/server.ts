@@ -7,6 +7,7 @@ import {
 } from "./notifications/publisher.js";
 import { accountsRouter } from "./routes/accounts.js";
 import { healthRouter } from "./routes/health.js";
+import { lotteryApplicationsRouter } from "./routes/lottery-applications.js";
 import { lotteryResultsRouter } from "./routes/lottery-results.js";
 import { stocksRouter } from "./routes/stocks.js";
 
@@ -36,6 +37,7 @@ export function createApp(options: CreateAppOptions = {}): CreatedApp {
   app.use(healthRouter());
   app.use(accountsRouter(browserManager, notificationPublisher));
   app.use(stocksRouter());
-  app.use(lotteryResultsRouter());
+  app.use(lotteryApplicationsRouter(browserManager, notificationPublisher));
+  app.use(lotteryResultsRouter(browserManager, notificationPublisher));
   return { app, browserManager, notificationPublisher };
 }

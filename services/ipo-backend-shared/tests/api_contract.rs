@@ -8,11 +8,14 @@
 //! well (or that a `#[serde(rename...)]` has been introduced to preserve the
 //! external contract).
 
-use ipo_backend_shared::domain::{
-    application::LotteryResult,
-    notification::{ChannelType, NotificationEventType},
-    operation_log::OperationEventType,
-    stock::{FetchOrigin, Market, StockStatus},
+use ipo_backend_shared::{
+    acl::browser::{translate_application_result, ApplicationResult},
+    domain::{
+        application::LotteryResult,
+        notification::{ChannelType, NotificationEventType},
+        operation_log::OperationEventType,
+        stock::{FetchOrigin, Market, StockStatus},
+    },
 };
 
 fn serialize<T: serde::Serialize>(value: &T) -> String {
@@ -188,4 +191,69 @@ fn lottery_result_serde_matches_api_specification_labels() {
         let restored: LotteryResult = deserialize(&raw);
         assert_eq!(restored, result);
     }
+}
+
+#[test]
+fn application_result_serde_uses_snake_case_status_tag() {
+    assert_eq!(
+        serialize(&ApplicationResult::Success),
+        "{\"status\":\"success\"}"
+    );
+    assert_eq!(
+        serialize(&ApplicationResult::Failure {
+            reason: "timeout".to_string(),
+        }),
+        "{\"status\":\"failure\",\"reason\":\"timeout\"}"
+    );
+    assert_eq!(
+        serialize(&ApplicationResult::AlreadyApplied),
+        "{\"status\":\"already_applied\"}"
+    );
+    assert_eq!(
+        serialize(&ApplicationResult::InsufficientBalance),
+        "{\"status\":\"insufficient_balance\"}"
+    );
+}
+
+#[test]
+fn application_result_roundtrips_all_variants() {
+    for variant in [
+        ApplicationResult::Success,
+        ApplicationResult::Failure {
+            reason: "broker offline".to_string(),
+        },
+        ApplicationResult::AlreadyApplied,
+        ApplicationResult::InsufficientBalance,
+    ] {
+        let raw = serialize(&variant);
+        let restored: ApplicationResult = deserialize(&raw);
+        assert_eq!(restored, variant);
+    }
+}
+
+#[test]
+fn application_result_translator_matches_acl_specification() {
+    // The keyword table matches docs/03-detailed-design/acl.md §3.5.
+    assert_eq!(
+        translate_application_result("申込を受け付けました"),
+        ApplicationResult::Success
+    );
+    assert_eq!(
+        translate_application_result("申込完了"),
+        ApplicationResult::Success
+    );
+    assert_eq!(
+        translate_application_result("既に申込済みです"),
+        ApplicationResult::AlreadyApplied
+    );
+    assert_eq!(
+        translate_application_result("残高が不足しています"),
+        ApplicationResult::InsufficientBalance
+    );
+    assert_eq!(
+        translate_application_result("未知のエラー"),
+        ApplicationResult::Failure {
+            reason: "未知のエラー".to_string(),
+        }
+    );
 }

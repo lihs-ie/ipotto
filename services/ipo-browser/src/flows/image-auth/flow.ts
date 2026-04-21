@@ -11,6 +11,8 @@ import {
 
 import {
   chooseImageIndices,
+  extractKeywordFromOnclick,
+  type ImageAuthButton,
   type ImageAuthenticationKeywords,
 } from "./matcher.js";
 
@@ -79,25 +81,28 @@ export async function runImageAuthentication(
       );
     }
 
-    const altTexts = await Promise.all(
+    const candidateButtons: ImageAuthButton[] = await Promise.all(
       buttonHandles.map(async (handle) => {
-        const direct = await handle.getAttribute("alt");
-        if (direct !== null && direct.length > 0) {
-          return direct;
-        }
-        const nested = await handle
-          .locator(selectors.imageElement.primary)
-          .first()
-          .getAttribute("alt")
+        const direct = await handle.getAttribute("alt").catch(() => null);
+        const nestedAlt =
+          direct !== null && direct.length > 0
+            ? direct
+            : await handle
+                .locator(selectors.imageElement.primary)
+                .first()
+                .getAttribute("alt")
+                .catch(() => null);
+        const onclickAttribute = await handle
+          .getAttribute("onclick")
           .catch(() => null);
-        return nested ?? "";
+        return {
+          altText: nestedAlt ?? null,
+          onclickKeyword: extractKeywordFromOnclick(onclickAttribute),
+        };
       }),
     );
 
-    const outcome = chooseImageIndices(
-      options.keywords,
-      altTexts.map((altText) => ({ altText })),
-    );
+    const outcome = chooseImageIndices(options.keywords, candidateButtons);
     if (outcome.status !== "matched") {
       return failure(
         page,

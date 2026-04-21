@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { chooseImageIndices } from "./matcher.js";
+import { chooseImageIndices, extractKeywordFromOnclick } from "./matcher.js";
 
 const fruits = [
   { altText: "みかん" },
@@ -98,5 +98,54 @@ describe("chooseImageIndices", () => {
       [],
     );
     expect(outcome).toEqual({ status: "missing_keyword", keyword: "みかん" });
+  });
+
+  it("falls back to onclick charaWord when alt attribute is absent", () => {
+    const buttons = [
+      { altText: null, onclickKeyword: "みかん" },
+      { altText: null, onclickKeyword: "りんご" },
+      { altText: null, onclickKeyword: "ぶどう" },
+    ];
+    const outcome = chooseImageIndices(
+      { first: "りんご", second: "ぶどう" },
+      buttons,
+    );
+    expect(outcome).toEqual({ status: "matched", indices: [1, 2] });
+  });
+
+  it("prefers alt attribute when both alt and onclick keyword are present", () => {
+    const buttons = [
+      { altText: "みかん", onclickKeyword: "りんご" },
+      { altText: "ぶどう", onclickKeyword: "いちご" },
+    ];
+    const outcome = chooseImageIndices(
+      { first: "みかん", second: "ぶどう" },
+      buttons,
+    );
+    expect(outcome).toEqual({ status: "matched", indices: [0, 1] });
+  });
+});
+
+describe("extractKeywordFromOnclick", () => {
+  it("parses emojiAltClick charaWord argument", () => {
+    expect(
+      extractKeywordFromOnclick(
+        "emojiAltClick('emoji_3', 3, '/member/img/emoji/apple.gif', 'りんご')",
+      ),
+    ).toBe("りんご");
+  });
+
+  it("returns null for non-alt emojiClick calls", () => {
+    expect(
+      extractKeywordFromOnclick(
+        "emojiClick('emoji_3', 3, '/member/img/emoji/apple.gif')",
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null when input is null or undefined", () => {
+    expect(extractKeywordFromOnclick(null)).toBeNull();
+    expect(extractKeywordFromOnclick(undefined)).toBeNull();
+    expect(extractKeywordFromOnclick("")).toBeNull();
   });
 });
