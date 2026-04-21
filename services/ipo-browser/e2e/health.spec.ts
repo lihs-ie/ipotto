@@ -17,6 +17,20 @@ test.describe("HTML Mock Server Health Check", () => {
     await expect(page.locator("#passwd")).toBeVisible();
     await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
+
+  test("image authentication fixture exposes alt-tagged image buttons (Phase 3 Sprint 6)", async ({
+    page,
+  }) => {
+    await page.goto("/rakuten/image_auth_page.html");
+    await expect(page.locator("#image-auth-container")).toBeVisible();
+    await expect(page.locator("#image-buttons button")).toHaveCount(10);
+    const altTexts = await page.locator("#image-buttons img[alt]").evaluateAll(
+      (nodes) => nodes.map((node) => (node as HTMLImageElement).alt),
+    );
+    expect(altTexts).toHaveLength(10);
+    expect(new Set(altTexts).size).toBe(10);
+    await expect(page.locator("#submit-button")).toBeVisible();
+  });
 });
 
 test.describe("ipo-browser Service Health Check", () => {

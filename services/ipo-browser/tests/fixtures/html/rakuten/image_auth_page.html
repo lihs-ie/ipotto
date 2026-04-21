@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>楽天証券 画像認証</title>
+</head>
+<body>
+  <div id="image-auth-container">
+    <h1>画像認証</h1>
+    <p id="prompt">表示されたキーワードに対応する 2 つの画像を選択してください。</p>
+    <div id="image-buttons">
+      <!--
+        alt 属性は Playwright 側の matcher で keyword と突き合わせる。
+        楽天証券の実認証画面が 9〜10 個の画像から 2 個を選ばせる形式なので
+        同等の密度の fixture を用意。
+      -->
+      <button id="img-0" type="button" data-index="0">
+        <img src="/rakuten/assets/dummy.png" alt="みかん" />
+      </button>
+      <button id="img-1" type="button" data-index="1">
+        <img src="/rakuten/assets/dummy.png" alt="りんご" />
+      </button>
+      <button id="img-2" type="button" data-index="2">
+        <img src="/rakuten/assets/dummy.png" alt="ぶどう" />
+      </button>
+      <button id="img-3" type="button" data-index="3">
+        <img src="/rakuten/assets/dummy.png" alt="いちご" />
+      </button>
+      <button id="img-4" type="button" data-index="4">
+        <img src="/rakuten/assets/dummy.png" alt="ばなな" />
+      </button>
+      <button id="img-5" type="button" data-index="5">
+        <img src="/rakuten/assets/dummy.png" alt="すいか" />
+      </button>
+      <button id="img-6" type="button" data-index="6">
+        <img src="/rakuten/assets/dummy.png" alt="めろん" />
+      </button>
+      <button id="img-7" type="button" data-index="7">
+        <img src="/rakuten/assets/dummy.png" alt="さくらんぼ" />
+      </button>
+      <button id="img-8" type="button" data-index="8">
+        <img src="/rakuten/assets/dummy.png" alt="もも" />
+      </button>
+      <button id="img-9" type="button" data-index="9">
+        <img src="/rakuten/assets/dummy.png" alt="なし" />
+      </button>
+    </div>
+    <button id="submit-button" type="submit">確認</button>
+    <div id="auth-success" hidden>認証成功</div>
+    <div id="auth-error" hidden>認証に失敗しました</div>
+  </div>
+</body>
+</html>

@@ -19,9 +19,19 @@ export type RakutenLoginSelectors = {
   submitButton: SelectorDefinition;
 };
 
+export type RakutenImageAuthenticationSelectors = {
+  container: SelectorDefinition;
+  imageButtons: SelectorDefinition;
+  imageElement: SelectorDefinition;
+  submitButton: SelectorDefinition;
+  successIndicator: SelectorDefinition;
+  errorMessage: SelectorDefinition;
+};
+
 export type SelectorTree = {
   rakuten: {
     login: RakutenLoginSelectors;
+    imageAuthentication: RakutenImageAuthenticationSelectors;
   };
 };
 
