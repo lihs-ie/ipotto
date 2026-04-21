@@ -67,6 +67,7 @@ jobs:
             firebase-emulator \
             pubsub-emulator \
             html-mock-server \
+            notification-mock \
             ipo-browser \
             ipo-api \
             ipo-info-fetcher \
@@ -260,6 +261,39 @@ jobs:
             -X DELETE "http://localhost:8080/api/v1/accounts/${identifier}")
           if [ "$status" != "204" ]; then
             echo "expected 204 on delete account, got $status"; exit 1
+          fi
+
+      - name: Phase 2 Sprint 4 smoke — notification dispatch (Email via SendGrid mock)
+        run: |
+          # The Sprint 3 notification settings step above already
+          # installed an Email channel subscribed to
+          # ApplicationCompleted. Publishing the Pub/Sub envelope to
+          # /internal/pubsub/ipo-notification makes the ipo-api
+          # dispatch use case resolve that channel and hit the
+          # SendGrid mock endpoint configured via
+          # SENDGRID_ENDPOINT=http://notification-mock:80/sendgrid/mail/send.
+          # ApplicationCompleted does not use camelCase on its fields
+          # (unlike the API-level DTOs), so the payload must use the
+          # raw domain event's snake_case field names.
+          payload='{
+            "eventType": "ApplicationCompleted",
+            "payload": {
+              "identifier": "01HA1234567890ABCDEFGHJKMN",
+              "stock": "01HB1234567890ABCDEFGHJKMN",
+              "securities_account": "01HC1234567890ABCDEFGHJKMN",
+              "applied_shares": 100,
+              "applied_price": 1400,
+              "applied_at": "2026-03-25T10:00:00Z"
+            }
+          }'
+          status=$(curl -o /dev/null -s -w "%{http_code}" \
+            -H 'content-type: application/json' \
+            -X POST http://localhost:8080/internal/pubsub/ipo-notification \
+            -d "$payload")
+          if [ "$status" != "204" ]; then
+            echo "expected 204 on notification dispatch, got $status"
+            docker compose logs ipo-api notification-mock
+            exit 1
           fi
 
       - name: Smoke test ipo-info-fetcher

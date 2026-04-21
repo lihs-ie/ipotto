@@ -25,6 +25,20 @@ pub fn sendgrid_api_key() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// Overridable SendGrid endpoint. Production defaults to the live SendGrid
+/// v3 Mail Send API; dev and CI smoke override this to point at the
+/// notification mock server.
+pub fn sendgrid_endpoint() -> String {
+    env::var("SENDGRID_ENDPOINT")
+        .unwrap_or_else(|_| "https://api.sendgrid.com/v3/mail/send".to_string())
+}
+
+/// Overridable LINE Notify endpoint.
+pub fn line_notify_endpoint() -> String {
+    env::var("LINE_NOTIFY_ENDPOINT")
+        .unwrap_or_else(|_| "https://notify-api.line.me/api/notify".to_string())
+}
+
 /// Loads the email allow-list from `ALLOWED_EMAIL` (comma-separated).
 pub fn build_email_allowlist() -> Result<Arc<EmailAllowlistConfig>, String> {
     EmailAllowlistConfig::from_env().map(Arc::new)
