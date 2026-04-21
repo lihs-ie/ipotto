@@ -30,6 +30,8 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Coverage
         run: cargo llvm-cov --all --lcov --output-path lcov.info
+      - name: Enforce ipo-backend-shared coverage threshold (Phase 0 Task 0.1)
+        run: cargo llvm-cov -p ipo-backend-shared --fail-under-lines 80 --summary-only
 
   rust-integration-tests:
     name: Rust Integration Tests

@@ -58,7 +58,7 @@ install: ## 全Node.jsサービスの依存関係インストール（pnpm works
 # Rust (services/)
 # ============================================================
 
-.PHONY: rust-build rust-test rust-lint rust-fmt rust-fmt-check rust-coverage rust-ci
+.PHONY: rust-build rust-test rust-lint rust-fmt rust-fmt-check rust-coverage rust-coverage-shared rust-ci
 
 rust-build: ## Rustワークスペース全体ビルド
 	cd services && cargo build
@@ -78,7 +78,10 @@ rust-fmt-check: ## Rustフォーマットチェック
 rust-coverage: ## Rustカバレッジレポート生成
 	cd services && cargo llvm-cov --all
 
-rust-ci: rust-fmt-check rust-lint rust-test ## Rust CI相当（直接実行。actrun版: make ci-rust）
+rust-coverage-shared: ## ipo-backend-sharedのカバレッジ80%+閾値検証（Phase 0 Task 0.1）
+	cd services && cargo llvm-cov -p ipo-backend-shared --fail-under-lines 80
+
+rust-ci: rust-fmt-check rust-lint rust-test rust-coverage-shared ## Rust CI相当（直接実行。actrun版: make ci-rust）
 
 # ============================================================
 # ipo-browser (services/ipo-browser/)
