@@ -323,9 +323,65 @@ Phase 6:                                         [■■■■■■]
 
 ---
 
-## 9. 更新履歴
+## 9. Phase 0 検証ログ
+
+### 9.1 完了状況 (2026-04-21)
+
+| Task ID | タイトル | 状態 | 備考 |
+|---|---|---|---|
+| 0.1 | ipo-backend-shared 80%+ カバレッジ | **完了** | 79.42% → 82.56% (line) / 80.87% (region)。`make rust-coverage-shared` + CI (`cargo llvm-cov -p ipo-backend-shared --fail-under-lines 80`) で回帰ゲート化 |
+| 0.2 | Terraform 環境 apply 確認 | **完了 (代替手段)** | ユーザー方針で「stg を dev と読み替え」。`.github/workflows/terraform-ci.yml` が main 向け PR で `terraform fmt -check` + `validate` + `plan` (stg / prd) を自動実行し、`build-and-deploy.yml` の workflow_dispatch で手動 apply を発動する構成。ローカルで `terraform -chdir=terraform/environments/stg validate` が通過することを確認済み (Terraform 1.14.8) |
+| 0.3 | Firebase Auth / Firestore / Pub/Sub エミュレータ統合確認 | **完了 (代替手段)** | `.github/workflows/ci.yml` の `docker-compose-smoke` ジョブが firebase-emulator / pubsub-emulator / html-mock-server + 4 Rust サービスを起動し、各 `/health` + API-001 `/stocks` + API-005 `/exclusions` + `/internal/pubsub/*` のスモークを完走する構成。Task 0.3 の「統合確認」はこのジョブで担保 |
+| 0.4 | API 仕様と ipo-backend-shared の型整合レビュー | **完了** | `docs/04-api-specification/type-consistency-matrix.md` を新設、14 エンドポイント × 主要フィールド × domain 型の対応表を作成。`services/ipo-backend-shared/tests/api_contract.rs` (10 tests) で serde 契約を固定化。§3-a/c に後続 PR 対応事項 4 件を明記 |
+
+### 9.2 M0 判定
+
+- [x] `cargo llvm-cov -p ipo-backend-shared --fail-under-lines 80` が CI でグリーン
+- [x] Terraform stg 環境が `fmt -check` + `validate` をパス (実 apply は `build-and-deploy.yml` の manual trigger で実施)
+- [x] 3 エミュレータ + 4 Rust サービスの統合スモークが `ci.yml: docker-compose-smoke` でグリーン
+- [x] `docs/04-api-specification/type-consistency-matrix.md` が develop にコミット済み
+- [x] `cargo test -p ipo-backend-shared --test api_contract` (10 tests) がグリーン
+
+→ **M0 達成**
+
+### 9.3 後続 PR 候補 (Phase 1 着手前に可能なら解消)
+
+| 優先度 | タイトル案 | スコープ |
+|---|---|---|
+| Medium | `docs(api-spec): fix market example and list all StockStatus values` | §3-c の API-001 / API-003 修正 |
+| Medium | `docs(api-spec): document supported eventType values for GET /logs` | §3-c の API-014 修正 |
+| Low | `fix(backend-shared): pick canonical serde form for OperationEventType and align as_str` | §3-a-4 の OperationEventType 正準形決定 |
+
+---
+
+## 10. Phase 1 着手準備
+
+### 10.1 着手可能な次タスク
+
+develop の現状に照らすと、ロードマップの「未着手」として残るのは主に以下:
+
+- **Phase 1 Sprint 1**:
+  - 1.3 Firebase Auth IDトークン検証ミドルウェア (ipo-api 側)
+  - 1.4 メールホワイトリスト認可ミドルウェア
+  - 1.5 構造化ロギング (機密情報マスキング)
+  - ※ 1.1 (Firestore クライアント) / 1.2 (Secret Manager) は `infrastructure/firestore` / `infrastructure/secrets` で既達。
+- **Phase 1 Sprint 2 参照系 API**:
+  - 実ハンドラは既に骨格が存在するため、Firebase Auth middleware 接続と permission チェック + エミュレータ結合テスト (`docker-compose-smoke` 内) の網羅が中心。
+- **Phase 3 Sprint 5**: ipo-browser のログインフロー本体。HTTP サーバー (`src/index.ts`) から `POST /login` まで未実装。
+- **Phase 5 全般**: ipo-frontend のページ実装、ipo-frontend-shared の Zod schema / Brand types。
+
+### 10.2 推奨着手順
+
+1. **Phase 1 Sprint 1 残タスク (1.3 / 1.4 / 1.5)** を先に片付けて M1 を確定 (参照系 API の挙動が GCP 認証込みで動く状態)。
+2. 並列で **Phase 3 Sprint 5 (ipo-browser ログイン)** を着手 (API 側に依存せずインタフェースのみ合意すれば進む)。
+3. Phase 5 の frontend 作業は **M1 完了後**に API-001 ~ 004 の型が凍結された段階で開始 (`ipo-frontend-shared` Zod schemas の根拠が揃う)。
+
+---
+
+## 11. 更新履歴
 
 | 日付 | 内容 |
 |---|---|
 | 2026-04-21 | 初版作成（Phase 0〜6 / 13スプリント構成） |
 | 2026-04-21 | 現状スナップショット (§2) を `origin/develop` ベースに更新。Phase 0 Task 0.1 が 80%+ 閾値到達目前、Phase 1 Sprint 1 / Phase 2 Sprint 4 / Phase 3 Sprint 6 の一部は実装済みである点を明記 |
+| 2026-04-21 | §9 Phase 0 検証ログ / §10 Phase 1 着手準備を追加。M0 達成を記録 (Task 0.1 ~ 0.4 完了)。後続 PR 3 件と Phase 1 着手推奨順を明記 |
