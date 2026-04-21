@@ -390,10 +390,9 @@ API-013 `POST /api/v1/accounts/{id}/test` の接続テストは ipo-browser + ht
 
 ### 10.4 残タスク / 次のアクション
 
-- **Phase 0 発の後続 PR 候補** (Phase 1 着手前に可能なら):
+- **Phase 0 発の後続 PR 候補** (残):
   - `docs(api-spec): fix market example and list all StockStatus values`
-  - `docs(api-spec): document supported eventType values for GET /logs`
-  - `fix(backend-shared): pick canonical serde form for OperationEventType and align as_str`
+  - ※ `docs(api-spec): document supported eventType values for GET /logs` と `fix(backend-shared): pick canonical serde form for OperationEventType and align as_str` は `fix(backend-shared): canonical serde form for OperationEventType` で同時解消済
 - **Phase 2 Sprint 3 残**: API-013 接続テスト smoke (`ipo-browser` 経由)。
 - **Phase 2 Sprint 4**: 通知ディスパッチ結合 smoke (`/internal/pubsub/ipo-notification` → LINE / SendGrid / Slack adapter)。`infrastructure/notification/*` は既存だが end-to-end 経路は未検証。
 - **Phase 3 Sprint 5**: ipo-browser 楽天証券ログインフロー本体 (`src/index.ts` の `POST /login`)。本スプリントと並列化可能。
@@ -410,3 +409,4 @@ API-013 `POST /api/v1/accounts/{id}/test` の接続テストは ipo-browser + ht
 | 2026-04-21 | §9 Phase 0 検証ログ / §10 Phase 1 着手準備を追加。M0 達成を記録 (Task 0.1 ~ 0.4 完了)。後続 PR 3 件と Phase 1 着手推奨順を明記 |
 | 2026-04-21 | §10 を「Phase 1 進行状況」に差し替え。Sprint 1 (PR #17 / #18 / #19) と Sprint 2 (`docker-compose-smoke` で参照系 API 認証付き 200 / 401 / 403 の検証) の完了をもって **M1 達成**。残タスクに後続 PR 3 件 + Phase 2〜5 の着手候補を記載 |
 | 2026-04-21 | §10 を「Phase 1 / Phase 2 進行状況」に改題。Phase 2 Sprint 3 操作系 API (API-005 / 006 / 008 / 010 / 011 / 012) の認証付き CRUD smoke を `docker-compose-smoke` に追加。M2 判定は Sprint 4 (通知ディスパッチ結合) + API-013 接続テスト smoke の整備後 |
+| 2026-04-21 | Phase 0 後続 PR の `OperationEventType` serde 正準化を実施 (snake_case 統一、契約テスト `agree_on_snake_case` に改名)。同 PR で API-014 spec に `eventType` 取りうる値一覧を追記 |

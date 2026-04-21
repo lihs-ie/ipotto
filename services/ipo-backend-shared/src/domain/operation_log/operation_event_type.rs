@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Event type recorded in an operation log.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
 pub enum OperationEventType {
     FetchStocks,
     ApplyLottery,

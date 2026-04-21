@@ -129,52 +129,31 @@ fn notification_event_type_serde_derive_uses_pascal_case() {
 }
 
 #[test]
-fn operation_event_type_serde_and_as_str_diverge_by_case_intentionally() {
-    // Regression guard for the divergence documented in
-    // docs/04-api-specification/type-consistency-matrix.md §3 item 4:
-    // serde derive emits PascalCase variant names, while `as_str()` is snake_case.
-    // Keep both frozen until the API layer picks one canonical form.
-    assert_eq!(
-        serialize(&OperationEventType::FetchStocks),
-        "\"FetchStocks\""
-    );
-    assert_eq!(OperationEventType::FetchStocks.as_str(), "fetch_stocks");
-
-    assert_eq!(
-        serialize(&OperationEventType::ApplyLottery),
-        "\"ApplyLottery\""
-    );
-    assert_eq!(OperationEventType::ApplyLottery.as_str(), "apply_lottery");
-
-    assert_eq!(
-        serialize(&OperationEventType::CheckLotteryResult),
-        "\"CheckLotteryResult\""
-    );
-    assert_eq!(
-        OperationEventType::CheckLotteryResult.as_str(),
-        "check_lottery_result"
-    );
-
-    assert_eq!(
-        serialize(&OperationEventType::NotificationDispatch),
-        "\"NotificationDispatch\""
-    );
-    assert_eq!(
-        OperationEventType::NotificationDispatch.as_str(),
-        "notification_dispatch"
-    );
-
-    assert_eq!(
-        serialize(&OperationEventType::ConnectionTest),
-        "\"ConnectionTest\""
-    );
-    assert_eq!(
-        OperationEventType::ConnectionTest.as_str(),
-        "connection_test"
-    );
-
-    assert_eq!(serialize(&OperationEventType::Other), "\"Other\"");
-    assert_eq!(OperationEventType::Other.as_str(), "other");
+fn operation_event_type_serde_and_as_str_agree_on_snake_case() {
+    // Canonical form picked by
+    // `fix(backend-shared): canonical serde form for OperationEventType`:
+    // both serde derive (via `#[serde(rename_all = "snake_case")]`) and
+    // `as_str()` expose the snake_case spelling that `GET /api/v1/logs`
+    // returns and accepts as the `eventType` query parameter.
+    for (variant, expected) in [
+        (OperationEventType::FetchStocks, "fetch_stocks"),
+        (OperationEventType::ApplyLottery, "apply_lottery"),
+        (
+            OperationEventType::CheckLotteryResult,
+            "check_lottery_result",
+        ),
+        (
+            OperationEventType::NotificationDispatch,
+            "notification_dispatch",
+        ),
+        (OperationEventType::ConnectionTest, "connection_test"),
+        (OperationEventType::Other, "other"),
+    ] {
+        assert_eq!(serialize(&variant), format!("\"{expected}\""));
+        assert_eq!(variant.as_str(), expected);
+        let restored: OperationEventType = deserialize(&format!("\"{expected}\""));
+        assert_eq!(restored, variant);
+    }
 }
 
 #[test]
