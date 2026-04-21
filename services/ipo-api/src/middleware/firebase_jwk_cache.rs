@@ -102,9 +102,7 @@ mod tests {
     use tokio::sync::Mutex;
 
     use super::{FetchedJwks, FirebaseJwkCache, JwksFetcher};
-    use crate::middleware::FirebaseAuthError;
-
-    const TEST_PEM: &[u8] = include_bytes!("testdata/firebase_jwk_sample.pem");
+    use crate::middleware::{test_keypair::test_keypair, FirebaseAuthError};
 
     struct StubFetcher {
         calls: AtomicUsize,
@@ -141,7 +139,7 @@ mod tests {
     #[tokio::test]
     async fn fetches_once_per_ttl_and_returns_cached_key() {
         let fetcher = Arc::new(StubFetcher::new(
-            vec![("kid-a".to_string(), TEST_PEM.to_vec())],
+            vec![("kid-a".to_string(), test_keypair().public_pem.clone())],
             Duration::from_secs(60),
         ));
         let cache = FirebaseJwkCache::new(fetcher.clone());
@@ -161,7 +159,7 @@ mod tests {
     #[tokio::test]
     async fn refreshes_once_for_unknown_kid_and_surfaces_error_if_still_missing() {
         let fetcher = Arc::new(StubFetcher::new(
-            vec![("kid-a".to_string(), TEST_PEM.to_vec())],
+            vec![("kid-a".to_string(), test_keypair().public_pem.clone())],
             Duration::from_secs(60),
         ));
         let cache = FirebaseJwkCache::new(fetcher.clone());

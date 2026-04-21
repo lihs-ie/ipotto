@@ -3,6 +3,8 @@ mod firebase_error;
 pub(crate) mod firebase_jwk_cache;
 mod firebase_token_verifier;
 mod google_secure_token_fetcher;
+#[cfg(test)]
+mod test_keypair;
 mod verified_token;
 
 pub use firebase_auth::firebase_auth_middleware;

@@ -86,12 +86,11 @@ mod tests {
     use std::time::Duration;
 
     use super::{parse_max_age, FetchedJwks, GoogleSecureTokenFetcher, JwksFetcher};
+    use crate::middleware::test_keypair::test_keypair;
     use wiremock::{
         matchers::{method, path},
         Mock, MockServer, ResponseTemplate,
     };
-
-    const SAMPLE_PEM: &[u8] = include_bytes!("testdata/firebase_jwk_sample.pem");
 
     #[test]
     fn parses_max_age_directive() {
@@ -105,7 +104,8 @@ mod tests {
     #[tokio::test]
     async fn fetches_keys_and_ttl_from_endpoint() {
         let server = MockServer::start().await;
-        let pem_string = std::str::from_utf8(SAMPLE_PEM)
+        let public_pem = test_keypair().public_pem.clone();
+        let pem_string = std::str::from_utf8(&public_pem)
             .expect("pem utf8")
             .to_string();
         let body = serde_json::json!({ "test-kid": pem_string });
@@ -126,7 +126,7 @@ mod tests {
         );
 
         let FetchedJwks { keys, ttl } = fetcher.fetch().await.expect("fetch ok");
-        assert_eq!(keys.get("test-kid").cloned(), Some(SAMPLE_PEM.to_vec()));
+        assert_eq!(keys.get("test-kid").cloned(), Some(public_pem));
         assert_eq!(ttl, Duration::from_secs(7_200));
     }
 

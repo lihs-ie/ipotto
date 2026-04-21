@@ -192,12 +192,13 @@ mod tests {
         FirebaseAuthConfig, FirebaseAuthError, FirebaseJwkCache, FirebaseTokenVerifier,
         FIREBASE_ISSUER_PREFIX,
     };
-    use crate::middleware::firebase_jwk_cache::{FetchedJwks, JwksFetcher};
+    use crate::middleware::{
+        firebase_jwk_cache::{FetchedJwks, JwksFetcher},
+        test_keypair::test_keypair,
+    };
 
     const TEST_KID: &str = "test-kid-1";
     const TEST_PROJECT_ID: &str = "ipotto-test";
-    const PUBLIC_PEM: &[u8] = include_bytes!("testdata/firebase_jwk_sample.pem");
-    const PRIVATE_PEM: &[u8] = include_bytes!("testdata/firebase_jwk_sample_private.pem");
 
     struct SinglePemFetcher;
 
@@ -205,7 +206,7 @@ mod tests {
     impl JwksFetcher for SinglePemFetcher {
         async fn fetch(&self) -> Result<FetchedJwks, FirebaseAuthError> {
             let mut keys = HashMap::new();
-            keys.insert(TEST_KID.to_string(), PUBLIC_PEM.to_vec());
+            keys.insert(TEST_KID.to_string(), test_keypair().public_pem.clone());
             Ok(FetchedJwks {
                 keys,
                 ttl: Duration::from_secs(60),
@@ -227,7 +228,8 @@ mod tests {
     fn sign_token(claims: &TestClaims, kid: Option<&str>, alg: Algorithm) -> String {
         let mut header = Header::new(alg);
         header.kid = kid.map(str::to_string);
-        let key = EncodingKey::from_rsa_pem(PRIVATE_PEM).expect("valid private key");
+        let key =
+            EncodingKey::from_rsa_pem(&test_keypair().private_pem).expect("valid private key");
         encode(&header, claims, &key).expect("jwt encode")
     }
 
