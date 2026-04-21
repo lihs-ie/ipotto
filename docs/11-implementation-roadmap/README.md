@@ -393,7 +393,7 @@ API-013 `POST /api/v1/accounts/{id}/test` の接続テストは ipo-browser + ht
 - **Phase 0 発の後続 PR 候補** (残):
   - `docs(api-spec): fix market example and list all StockStatus values`
   - ※ `docs(api-spec): document supported eventType values for GET /logs` と `fix(backend-shared): pick canonical serde form for OperationEventType and align as_str` は `fix(backend-shared): canonical serde form for OperationEventType` で同時解消済
-- **Phase 2 Sprint 3 残**: API-013 接続テスト smoke (`ipo-browser` 経由)。
+- ~~**Phase 2 Sprint 3 残**: API-013 接続テスト smoke (`ipo-browser` 経由)。~~ → 完了 (2026-04-21)。ipo-browser に `POST /internal/accounts/test` を追加し、`docker-compose-smoke` で `/api/v1/accounts/{id}/test` が `.success == true` を返すことを verify。
 - **Phase 2 Sprint 4**: Email + LINE + Slack の 3 adapter 全てが `/internal/pubsub/ipo-notification` から実発火する end-to-end smoke を `docker-compose-smoke` に追加済。Sprint 4 完了 (M2 残タスクは API-013 接続テスト smoke のみ)。
 - **Phase 3 Sprint 5**: ipo-browser 楽天証券ログインフロー本体 (`src/index.ts` の `POST /login`)。本スプリントと並列化可能。
 - **Phase 5 Sprint 9〜11**: フロントエンド実装。API-001 〜 004 の型が凍結されたため着手可能。
@@ -412,3 +412,4 @@ API-013 `POST /api/v1/accounts/{id}/test` の接続テストは ipo-browser + ht
 | 2026-04-21 | Phase 0 後続 PR の `OperationEventType` serde 正準化を実施 (snake_case 統一、契約テスト `agree_on_snake_case` に改名)。同 PR で API-014 spec に `eventType` 取りうる値一覧を追記 |
 | 2026-04-21 | Phase 2 Sprint 4 通知ディスパッチ結合 smoke を追加。`notification-mock` (nginx) コンテナを docker-compose に追加し、`SENDGRID_ENDPOINT` / `LINE_NOTIFY_ENDPOINT` を env 切替可能にして Email adapter の end-to-end 経路を CI で verify。LINE / Slack は mock 側 endpoint を先行整備、実発火 smoke は別 PR |
 | 2026-04-21 | Phase 2 Sprint 4 を LINE + Slack 実発火 smoke で完了。Sprint 3 の notification settings step で Email / LINE / Slack の 3 channel を ApplicationCompleted に subscribe 登録 (`channelCount == 3` assert)、Sprint 4 の publish で 3 adapter すべてが `notification-mock` の対応エンドポイントを叩く構成を 1 本の 204 で検証 |
+| 2026-04-21 | Phase 2 Sprint 3 Task 3.4 (API-013 接続テスト) 完了。ipo-browser の `src/index.ts` に `POST /internal/accounts/test` を追加 (credential バリデーション + html-mock-server 到達性チェック)。`docker-compose-smoke` で `/api/v1/accounts/{id}/test` が `success=true` を返すことを verify。**Phase 2 Sprint 3 全タスク完了 → M2 達成**。Phase 3 Sprint 5 で Playwright による実ログインフローに差し替え予定 |
