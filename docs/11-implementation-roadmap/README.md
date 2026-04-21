@@ -354,7 +354,7 @@ Phase 6:                                         [■■■■■■]
 
 ---
 
-## 10. Phase 1 進行状況
+## 10. Phase 1 / Phase 2 進行状況
 
 ### 10.1 Sprint 1 完了 (PR #17 / #18 / #19)
 
@@ -378,14 +378,25 @@ M1 の完了条件と、本スプリントで追加した客観的な担保:
 
 → **M1 達成**。
 
-### 10.3 残タスク / 次のアクション
+### 10.3 Phase 2 Sprint 3 操作系 API 認証付き smoke
+
+Phase 2 Sprint 3 の操作系ハンドラ (API-005 / 006 / 008 / 010 / 011 / 012) は develop に既に実装済。本スプリントでは `ci.yml: docker-compose-smoke` に認証付き CRUD smoke を追加し、allowed user のトークンで以下が CI 上で通ることを担保:
+
+- API-005 `POST /api/v1/exclusions` (201 + `identifier` + `companyName`) → API-004 `GET` で登録内容を確認 → API-006 `DELETE /api/v1/exclusions/{id}` (204) → 一覧から消えていることを確認
+- API-008 `PUT /api/v1/notifications/settings` (Email channel + `ApplicationCompleted` 購読を登録) → API-007 `GET` で反映を確認
+- API-010 `POST /api/v1/accounts` (Rakuten credential 一式を登録、201 + `identifier`) → API-011 `PUT /api/v1/accounts/{id}` で credential 更新 (200 + `identifier`) → API-012 `DELETE /api/v1/accounts/{id}` (204)
+
+API-013 `POST /api/v1/accounts/{id}/test` の接続テストは ipo-browser + html-mock-server への依存が大きいため別 PR で整備する。
+
+### 10.4 残タスク / 次のアクション
 
 - **Phase 0 発の後続 PR 候補** (Phase 1 着手前に可能なら):
   - `docs(api-spec): fix market example and list all StockStatus values`
   - `docs(api-spec): document supported eventType values for GET /logs`
   - `fix(backend-shared): pick canonical serde form for OperationEventType and align as_str`
-- **Phase 2** (Sprint 3〜4): 操作系 API (API-005, 006, 008, 010〜012, 013) と通知ディスパッチ (`infrastructure/notification/*` は既存、結合は未検証)。
-- **Phase 3 Sprint 5**: ipo-browser のログインフロー本体。本スプリントと並列化可能。
+- **Phase 2 Sprint 3 残**: API-013 接続テスト smoke (`ipo-browser` 経由)。
+- **Phase 2 Sprint 4**: 通知ディスパッチ結合 smoke (`/internal/pubsub/ipo-notification` → LINE / SendGrid / Slack adapter)。`infrastructure/notification/*` は既存だが end-to-end 経路は未検証。
+- **Phase 3 Sprint 5**: ipo-browser 楽天証券ログインフロー本体 (`src/index.ts` の `POST /login`)。本スプリントと並列化可能。
 - **Phase 5 Sprint 9〜11**: フロントエンド実装。API-001 〜 004 の型が凍結されたため着手可能。
 
 ---
@@ -398,3 +409,4 @@ M1 の完了条件と、本スプリントで追加した客観的な担保:
 | 2026-04-21 | 現状スナップショット (§2) を `origin/develop` ベースに更新。Phase 0 Task 0.1 が 80%+ 閾値到達目前、Phase 1 Sprint 1 / Phase 2 Sprint 4 / Phase 3 Sprint 6 の一部は実装済みである点を明記 |
 | 2026-04-21 | §9 Phase 0 検証ログ / §10 Phase 1 着手準備を追加。M0 達成を記録 (Task 0.1 ~ 0.4 完了)。後続 PR 3 件と Phase 1 着手推奨順を明記 |
 | 2026-04-21 | §10 を「Phase 1 進行状況」に差し替え。Sprint 1 (PR #17 / #18 / #19) と Sprint 2 (`docker-compose-smoke` で参照系 API 認証付き 200 / 401 / 403 の検証) の完了をもって **M1 達成**。残タスクに後続 PR 3 件 + Phase 2〜5 の着手候補を記載 |
+| 2026-04-21 | §10 を「Phase 1 / Phase 2 進行状況」に改題。Phase 2 Sprint 3 操作系 API (API-005 / 006 / 008 / 010 / 011 / 012) の認証付き CRUD smoke を `docker-compose-smoke` に追加。M2 判定は Sprint 4 (通知ディスパッチ結合) + API-013 接続テスト smoke の整備後 |
