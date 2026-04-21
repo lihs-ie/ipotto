@@ -791,18 +791,20 @@ Authorization: Bearer <firebase_id_token>
 |---|---|---|---|
 | `startDate` | string (date) | No | 開始日（ISO 8601 日付） |
 | `endDate` | string (date) | No | 終了日（ISO 8601 日付） |
-| `eventType` | string | No | イベント種別でフィルタ |
+| `eventType` | string | No | イベント種別でフィルタ。取りうる値: `fetch_stocks` / `apply_lottery` / `check_lottery_result` / `notification_dispatch` / `connection_test` / `other` (snake_case)。`OperationEventType` enum と一対一対応 |
 | `cursor` | string | No | ページネーションカーソル |
 | `limit` | integer | No | 取得件数（デフォルト20、最大100） |
 
 **成功レスポンス（200 OK）:**
+
+レスポンスの `eventType` は上記クエリパラメータと同じ snake_case 値を返す。通知購読で使う `NotificationEventType` (PascalCase、例: `"ApplicationCompleted"`) とは別体系である点に注意。
 
 ```json
 {
   "items": [
     {
       "identifier": "log_abc123",
-      "eventType": "ApplicationCompleted",
+      "eventType": "apply_lottery",
       "serviceName": "ipo-browser",
       "status": "success",
       "message": "○○株式会社のIPO抽選に申し込みました（楽天証券、100株、1,400円）",
@@ -811,7 +813,7 @@ Authorization: Bearer <firebase_id_token>
     },
     {
       "identifier": "log_def456",
-      "eventType": "LoginSucceeded",
+      "eventType": "connection_test",
       "serviceName": "ipo-browser",
       "status": "success",
       "message": "楽天証券にログインしました",

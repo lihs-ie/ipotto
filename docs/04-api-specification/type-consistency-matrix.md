@@ -74,13 +74,11 @@ author: "lihs"
    - spec の `statusCounts{}` 例: Fetched / Eligible / Applied / Won / Lost / Alternate / Excluded / Failed （Purchased / Declined / Sold が抜けている）。
    - **対策**: spec 側に Purchased / Declined / Sold を追記 or 「購入後ステータスはダッシュボード集計から除外する」旨を明記。**後続 PR で対応**。
 
-4. **`OperationEventType` の serde 出力と `as_str()` が大きく乖離** (重要)
-   - 実装 (`services/ipo-backend-shared/src/domain/operation_log/operation_event_type.rs`):
-     - serde derive 出力 (variant 名): `"FetchStocks"` / `"ApplyLottery"` / `"CheckLotteryResult"` / `"NotificationDispatch"` / `"ConnectionTest"` / `"Other"` (PascalCase)。
-     - `as_str()` 出力: `"fetch_stocks"` / `"apply_lottery"` / `"check_lottery_result"` / `"notification_dispatch"` / `"connection_test"` / `"other"` (snake_case)。
-   - 同一 enum で PascalCase と snake_case が両立しており、**どちらが API/Firestore の正** なのかがコードだけでは読み取れない。
-   - ipo-api / ipo-result-checker / ipo-info-fetcher の実コードを確認し、Firestore に書くときと API に出すときで使っている関数を統一する必要がある。
-   - **対策**: Phase 1 Sprint 2 の API-014 実装着手前に、serde 出力 (PascalCase) に寄せるか snake_case に寄せるかを決定し、片方を削除する。本 Phase 0 では契約テストで現状の挙動（両立）を固定化し、齟齬を可視化する。
+4. **`OperationEventType` の serde 出力と `as_str()` の乖離** — **解消済**
+   - 当初、serde derive は PascalCase (`"FetchStocks"` 等)、`as_str()` は snake_case (`"fetch_stocks"` 等) で二重基準になっていた。
+   - `fix(backend-shared): canonical serde form for OperationEventType` で enum に `#[serde(rename_all = "snake_case")]` を付与し、両方とも snake_case に統一した。
+   - `as_str()` はそのまま (既に snake_case)。API-014 レスポンスもクエリも snake_case で一貫する。
+   - 契約テストは `operation_event_type_serde_and_as_str_agree_on_snake_case` で固定化。Firestore 保存形式も serde derive 経由で snake_case に揃う。
 
 ### (b) プレゼンテーション層で吸収すべき正当な加工
 
@@ -100,7 +98,7 @@ author: "lihs"
 |---|---|---|---|
 | API-001 `market` 値例 | `"グロース"` | `"Growth"` に変更 | Medium |
 | API-003 `statusCounts` keys | Purchased/Declined/Sold 欠落 | 全 StockStatus variant を列挙 or 非対象を明記 | Medium |
-| API-014 クエリ `eventType` 取りうる値 | 列挙なし | `OperationEventType::as_str()` の値 (`ApplyLottery`, `FetchStocks`, `CheckLotteryResult`, `NotificationDispatch`, `ConnectionTest`, `Other`) を列挙 | Medium |
+| API-014 クエリ `eventType` 取りうる値 | **解消済** | `fetch_stocks` / `apply_lottery` / `check_lottery_result` / `notification_dispatch` / `connection_test` / `other` を spec に明記済み (`fix(backend-shared): canonical serde form for OperationEventType` と同 PR) | — |
 | `NotificationEventType` と `OperationEventType` の使い分け | 記述なし | 「通知系は NotificationEventType、ログ系は OperationEventType」を共通仕様 §2 に明記 | Low |
 
 ---
@@ -110,8 +108,9 @@ author: "lihs"
 | 優先度 | タイトル案 | スコープ |
 |---|---|---|
 | Medium | `docs(api-spec): fix market example and list all StockStatus values` | (c) 表の API-001 / API-003 項目 |
-| Medium | `docs(api-spec): document supported eventType values for GET /logs` | (c) 表の API-014 項目 |
 | Low | `fix(backend-shared): pin serde rename for public-facing enums` | (a) の ChannelType / NotificationEventType に `#[serde(rename_all)]` を付与し、契約テストを厳格化 |
+
+`OperationEventType` の serde / `as_str()` 乖離と API-014 `eventType` 値一覧は `fix(backend-shared): canonical serde form for OperationEventType` でまとめて解消済み。
 
 ---
 
