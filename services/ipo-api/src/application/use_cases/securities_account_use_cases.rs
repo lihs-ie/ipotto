@@ -32,9 +32,13 @@ pub struct RegisterSecuritiesAccountOutput {
     pub securities_company: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSecuritiesAccountInput {
+    // Populated from the URL path in the handler; accepted (but ignored)
+    // if also provided in the body to preserve compatibility with clients
+    // that mirror the identifier.
+    #[serde(default)]
     pub account_identifier: String,
     pub login_id: Option<String>,
     pub login_password: Option<String>,
