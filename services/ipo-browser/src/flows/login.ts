@@ -9,91 +9,152 @@ import {
   type SelectorDefinition,
 } from "../config/selectors.js";
 
-// Phase 3 Sprint 5.3 — Rakuten login flow. Uses the selectors.yaml
-// definitions (primary + fallbacks) so markup rotations don't
-// immediately break the flow. Phase 3 Sprint 5.4 adds a screenshot on
-// total selector failure so operators can diff against a baseline.
+// Phase 3 Sprint 5.3 — Rakuten login flow. Uses selectors.yaml for
+// primary + fallback selectors so minor markup rotations stay
+// survivable. Sprint 6.4 wires in an optional twoFactorHandler that
+// fires whenever the image-authentication container appears after
+// form submission; the handler is a single injected closure so
+// accounts.ts can compose it with IMAP / Gmail readers + the
+// image-auth flow without this module having to know about either.
+
+export type TwoFactorHandlerArgs = {
+  readonly page: Page;
+};
+
+export type TwoFactorOutcome =
+  | { readonly status: "authenticated"; readonly message?: string }
+  | { readonly status: "bypassed"; readonly message?: string }
+  | {
+      readonly status: "failed";
+      readonly reason: string;
+      readonly screenshotPath: string | null;
+    };
+
+export type TwoFactorHandler = (
+  args: TwoFactorHandlerArgs,
+) => Promise<TwoFactorOutcome>;
 
 export type LoginOptions = {
-  loginId: string;
-  password: string;
-  loginPageUrl: string;
+  readonly loginId: string;
+  readonly password: string;
+  readonly loginPageUrl: string;
+  readonly twoFactorHandler?: TwoFactorHandler;
 };
 
 export type LoginSuccess = {
-  status: "success";
-  message: string;
+  readonly status: "success";
+  readonly message: string;
 };
 
 export type LoginFailure = {
-  status: "failure";
-  reason: string;
-  screenshotPath: string | null;
+  readonly status: "failure";
+  readonly reason: string;
+  readonly screenshotPath: string | null;
 };
 
 export type LoginResult = LoginSuccess | LoginFailure;
 
 const SCREENSHOT_DIR =
   process.env["BROWSER_SCREENSHOT_DIR"] ?? "/tmp/ipo-browser-screenshots";
+const TWO_FACTOR_DETECTION_TIMEOUT_MS = 3_000;
 
 export async function rakutenLogin(
   context: BrowserContext,
   options: LoginOptions,
 ): Promise<LoginResult> {
-  const selectors = loadSelectors().rakuten.login;
+  const loginSelectors = loadSelectors().rakuten.login;
+  const imageAuthSelectors = loadSelectors().rakuten.imageAuthentication;
   const page = await context.newPage();
   try {
     await page.goto(options.loginPageUrl, { waitUntil: "domcontentloaded" });
 
     const loginIdSelector = await firstMatchingSelector(
       page,
-      selectors.loginIdInput,
+      loginSelectors.loginIdInput,
     );
     if (loginIdSelector === null) {
       return failure(
         page,
         "selectors_exhausted",
         "loginId",
-        allSelectors(selectors.loginIdInput),
+        allSelectors(loginSelectors.loginIdInput),
       );
     }
     await page.fill(loginIdSelector, options.loginId);
 
     const passwordSelector = await firstMatchingSelector(
       page,
-      selectors.passwordInput,
+      loginSelectors.passwordInput,
     );
     if (passwordSelector === null) {
       return failure(
         page,
         "selectors_exhausted",
         "password",
-        allSelectors(selectors.passwordInput),
+        allSelectors(loginSelectors.passwordInput),
       );
     }
     await page.fill(passwordSelector, options.password);
 
     const submitSelector = await firstMatchingSelector(
       page,
-      selectors.submitButton,
+      loginSelectors.submitButton,
     );
     if (submitSelector === null) {
       return failure(
         page,
         "selectors_exhausted",
         "submit",
-        allSelectors(selectors.submitButton),
+        allSelectors(loginSelectors.submitButton),
       );
     }
     await page.click(submitSelector);
 
-    // Wait for the subsequent navigation or form-level update to settle.
-    // The HTML mock server fixture stays on the same URL, so we poll on
-    // domcontentloaded with a short timeout rather than requiring a full
-    // URL change.
     await page
       .waitForLoadState("networkidle", { timeout: 10_000 })
       .catch(() => undefined);
+
+    const twoFactorVisible = await detectImageAuthContainer(
+      page,
+      imageAuthSelectors.container,
+      TWO_FACTOR_DETECTION_TIMEOUT_MS,
+    );
+    if (twoFactorVisible) {
+      if (options.twoFactorHandler === undefined) {
+        const screenshotPath = await tryScreenshot(
+          page,
+          "login-two-factor-no-handler",
+        );
+        return {
+          status: "failure",
+          reason:
+            "rakuten presented the image-auth screen but no twoFactorHandler was configured",
+          screenshotPath,
+        };
+      }
+      const outcome = await options.twoFactorHandler({ page });
+      switch (outcome.status) {
+        case "authenticated":
+          return {
+            status: "success",
+            message:
+              outcome.message ?? "rakuten login + 2FA flow completed",
+          };
+        case "bypassed":
+          return {
+            status: "success",
+            message:
+              outcome.message ??
+              "rakuten login completed (2FA bypassed by handler)",
+          };
+        case "failed":
+          return {
+            status: "failure",
+            reason: outcome.reason,
+            screenshotPath: outcome.screenshotPath,
+          };
+      }
+    }
 
     return {
       status: "success",
@@ -126,6 +187,25 @@ async function firstMatchingSelector(
     }
   }
   return null;
+}
+
+async function detectImageAuthContainer(
+  page: Page,
+  definition: SelectorDefinition,
+  timeoutMs: number,
+): Promise<boolean> {
+  for (const selector of allSelectors(definition)) {
+    const visible = await page
+      .locator(selector)
+      .first()
+      .waitFor({ state: "visible", timeout: timeoutMs })
+      .then(() => true)
+      .catch(() => false);
+    if (visible) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function failure(
