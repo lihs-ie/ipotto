@@ -12,6 +12,15 @@ jobs:
     defaults:
       run:
         working-directory: services
+    env:
+      # Integration tests under ipo-backend-shared/tests/ connect to the
+      # Firebase + Pub/Sub emulators started below so cargo test drives
+      # the real gRPC `firestore` / `gcloud-pubsub` crates against live
+      # datastores. Without these env vars the tests become no-ops.
+      FIRESTORE_EMULATOR_HOST: localhost:8088
+      FIREBASE_PROJECT_ID: ipotto-local
+      PUBSUB_EMULATOR_HOST: localhost:8085
+      GCP_PROJECT: ipotto-local
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -20,6 +29,29 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: services
+      - name: Start Firebase + Pub/Sub emulators
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker compose up -d --build firebase-emulator pubsub-emulator
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:4000/ > /dev/null 2>&1; then
+              echo "Firebase emulator ready"
+              break
+            fi
+            echo "Waiting for Firebase emulator... ($i/60)"
+            sleep 2
+          done
+          for i in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8085)" = "200" ]; then
+              echo "Pub/Sub emulator ready"
+              exit 0
+            fi
+            echo "Waiting for Pub/Sub emulator... ($i/60)"
+            sleep 2
+          done
+          echo "Emulators failed to start"
+          docker compose logs firebase-emulator pubsub-emulator
+          exit 1
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -32,6 +64,14 @@ jobs:
         run: cargo llvm-cov --all --lcov --output-path lcov.info
       - name: Enforce ipo-backend-shared coverage threshold (Phase 0 Task 0.1)
         run: cargo llvm-cov -p ipo-backend-shared --fail-under-lines 80 --summary-only
+      - name: Show emulator logs on failure
+        if: failure()
+        working-directory: ${{ github.workspace }}
+        run: docker compose logs firebase-emulator pubsub-emulator
+      - name: Stop emulators
+        if: success() || failure()
+        working-directory: ${{ github.workspace }}
+        run: docker compose stop firebase-emulator pubsub-emulator
 
   rust-integration-tests:
     name: Rust Integration Tests
@@ -407,6 +447,54 @@ jobs:
           curl -sf -X POST http://localhost:8082/internal/pubsub/fetch \
             | tee /tmp/ipo-info-fetcher-response.json
           jq -e '.fetchedCount >= 1' /tmp/ipo-info-fetcher-response.json
+
+      - name: Phase 4 Sprint 8 smoke — Pub/Sub publish reached the emulator
+        run: |
+          # Pull the ipo-info-updated subscription to verify the publish
+          # above actually landed in the emulator (the in-memory
+          # publisher has been replaced by the real gRPC client in
+          # Sprint 8).
+          for attempt in $(seq 1 10); do
+            pulled=$(curl -sS -X POST \
+              "http://localhost:8085/v1/projects/ipotto-local/subscriptions/ipo-info-updated-notify-sub:pull" \
+              -H 'content-type: application/json' \
+              -d '{"maxMessages":5,"returnImmediately":true}')
+            received=$(echo "$pulled" | jq -r '.receivedMessages // [] | length')
+            if [ "$received" -ge 1 ]; then
+              echo "ipo-info-updated subscription received $received message(s)"
+              # Acknowledge so the DLQ smoke that follows does not see
+              # this as a stuck delivery.
+              ack_ids=$(echo "$pulled" | jq -r '[.receivedMessages[].ackId] | @json')
+              curl -sf -X POST \
+                "http://localhost:8085/v1/projects/ipotto-local/subscriptions/ipo-info-updated-notify-sub:acknowledge" \
+                -H 'content-type: application/json' \
+                -d "{\"ackIds\":$ack_ids}"
+              break
+            fi
+            echo "Attempt $attempt/10: no messages yet"
+            sleep 1
+          done
+          if [ "$received" -lt 1 ]; then
+            echo "No message appeared on ipo-info-updated after 10 attempts"
+            exit 1
+          fi
+
+      - name: Phase 4 Sprint 8 smoke — DLQ subscription starts empty
+        run: |
+          # ipo-dead-letter-sub is wired up by setup-pubsub-emulator.sh
+          # as a safety net. Under happy-path smoke we expect 0 messages
+          # since max_delivery_attempts (5) is well above the single
+          # publish we issued above.
+          pulled=$(curl -sS -X POST \
+            "http://localhost:8085/v1/projects/ipotto-local/subscriptions/ipo-dead-letter-sub:pull" \
+            -H 'content-type: application/json' \
+            -d '{"maxMessages":10,"returnImmediately":true}')
+          received=$(echo "$pulled" | jq -r '.receivedMessages // [] | length')
+          if [ "$received" -ne 0 ]; then
+            echo "DLQ had $received unexpected message(s): $pulled"
+            exit 1
+          fi
+          echo "DLQ subscription is empty as expected"
 
       - name: Smoke test ipo-result-checker
         run: |

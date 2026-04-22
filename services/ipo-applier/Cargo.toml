@@ -16,6 +16,7 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 reqwest = { version = "0.13", features = ["json"] }
 
 [dev-dependencies]
+ipo-backend-shared = { path = "../ipo-backend-shared", features = ["test-support"] }
 tower = "0.5"
 wiremock = "0.6"
 uuid = { version = "1", features = ["v4"] }

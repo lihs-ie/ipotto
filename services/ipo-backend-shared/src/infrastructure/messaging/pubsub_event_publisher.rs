@@ -1,34 +1,133 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
+use gcloud_googleapis::pubsub::v1::PubsubMessage;
+use gcloud_pubsub::client::{Client, ClientConfig};
 use serde_json::Value;
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::{acl::messaging::EventPublisherPort, errors::DomainError};
 
 use super::{PubSubEventEnvelope, PubSubEventMetadata};
 
-/// Concrete Pub/Sub publisher that records serialized messages.
-#[derive(Debug, Clone)]
+/// Default mapping between application-level `event_type` strings and
+/// their Pub/Sub topic names. Adding a new event requires an explicit
+/// entry here so publishers do not silently drop messages when the
+/// mapping is missing.
+pub fn default_topic_mapping() -> HashMap<String, String> {
+    let mut mapping = HashMap::new();
+    // Stock catalog updates — consumed by ipo-api notification handler.
+    mapping.insert(
+        "ipo-info-updated".to_string(),
+        "ipo-info-updated".to_string(),
+    );
+    // Lottery result confirmations — consumed by ipo-api notification handler.
+    mapping.insert(
+        "ipo-result-updated".to_string(),
+        "ipo-result-updated".to_string(),
+    );
+    // Generic notification fan-out bus (LINE / Email / Slack).
+    mapping.insert(
+        "ipo-notification".to_string(),
+        "ipo-notification".to_string(),
+    );
+    mapping.insert(
+        "ApplicationCompleted".to_string(),
+        "ipo-notification".to_string(),
+    );
+    mapping.insert(
+        "ApplicationFailed".to_string(),
+        "ipo-notification".to_string(),
+    );
+    mapping.insert(
+        "ImageAuthenticationFailed".to_string(),
+        "ipo-notification".to_string(),
+    );
+    mapping.insert(
+        "OperationErrorOccurred".to_string(),
+        "ipo-notification".to_string(),
+    );
+    mapping
+}
+
+/// Production Pub/Sub publisher that emits `PubSubEventEnvelope` JSON
+/// payloads through `google-cloud-pubsub`'s async gRPC client. Honours
+/// `PUBSUB_EMULATOR_HOST` via `ClientConfig::default().with_auth()` so
+/// local docker-compose and CI runs hit the emulator without any code
+/// changes.
+#[derive(Clone)]
 pub struct PubSubEventPublisher {
     service_name: String,
-    published_messages: Arc<Mutex<Vec<String>>>,
+    client: Arc<Client>,
+    topic_mapping: Arc<HashMap<String, String>>,
+}
+
+impl core::fmt::Debug for PubSubEventPublisher {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter
+            .debug_struct("PubSubEventPublisher")
+            .field("service_name", &self.service_name)
+            .field("topic_mapping_size", &self.topic_mapping.len())
+            .finish()
+    }
 }
 
 impl PubSubEventPublisher {
-    /// Creates a publisher for the service.
-    pub fn new(service_name: impl Into<String>) -> Self {
-        Self {
-            service_name: service_name.into(),
-            published_messages: Arc::new(Mutex::new(Vec::new())),
-        }
+    /// Builds a Pub/Sub publisher for the provided service, using
+    /// `default_topic_mapping` and the ambient auth (ADC or emulator).
+    /// `project_id` must match the GCP project whose topics the service
+    /// publishes to; when `PUBSUB_EMULATOR_HOST` is set it must also
+    /// match the emulator project (`GCP_PROJECT`, defaults to
+    /// `ipotto-local` in this repo's scripts).
+    pub async fn new(
+        service_name: impl Into<String>,
+        project_id: impl Into<String>,
+    ) -> Result<Self, DomainError> {
+        Self::with_topic_mapping(service_name, project_id, default_topic_mapping()).await
     }
 
-    /// Returns the published message bodies.
-    pub async fn published_messages(&self) -> Result<Vec<String>, DomainError> {
-        Ok(self.published_messages.lock().await.clone())
+    /// Builds a Pub/Sub publisher with a caller-supplied topic mapping.
+    /// Useful in tests or when a service needs to publish to alternate
+    /// topics (e.g. DLQ smoke tests).
+    pub async fn with_topic_mapping(
+        service_name: impl Into<String>,
+        project_id: impl Into<String>,
+        topic_mapping: HashMap<String, String>,
+    ) -> Result<Self, DomainError> {
+        let mut config = ClientConfig::default().with_auth().await.map_err(|error| {
+            DomainError::PubSubPublishError {
+                reason: format!("failed to build Pub/Sub client config: {error}"),
+            }
+        })?;
+        config.project_id = Some(project_id.into());
+        let client =
+            Client::new(config)
+                .await
+                .map_err(|error| DomainError::PubSubPublishError {
+                    reason: format!("failed to construct Pub/Sub client: {error}"),
+                })?;
+        Ok(Self {
+            service_name: service_name.into(),
+            client: Arc::new(client),
+            topic_mapping: Arc::new(topic_mapping),
+        })
     }
+
+    fn resolve_topic(&self, event_type: &str) -> Result<&str, DomainError> {
+        resolve_topic_from_mapping(&self.topic_mapping, event_type)
+    }
+}
+
+fn resolve_topic_from_mapping<'a>(
+    topic_mapping: &'a HashMap<String, String>,
+    event_type: &str,
+) -> Result<&'a str, DomainError> {
+    topic_mapping
+        .get(event_type)
+        .map(String::as_str)
+        .ok_or_else(|| DomainError::PubSubPublishError {
+            reason: format!("no Pub/Sub topic mapping configured for event_type: {event_type}"),
+        })
 }
 
 #[async_trait]
@@ -41,6 +140,7 @@ impl EventPublisherPort for PubSubEventPublisher {
         payload: Value,
         correlation_id: Option<Uuid>,
     ) -> Result<(), DomainError> {
+        let topic_name = self.resolve_topic(event_type)?;
         let envelope = PubSubEventEnvelope::new(
             event_type,
             aggregate_id,
@@ -52,48 +152,59 @@ impl EventPublisherPort for PubSubEventPublisher {
             serde_json::to_string(&envelope).map_err(|error| DomainError::PubSubPublishError {
                 reason: error.to_string(),
             })?;
-        self.published_messages.lock().await.push(body);
+
+        let topic = self.client.topic(topic_name);
+        let publisher = topic.new_publisher(None);
+        let awaiter = publisher
+            .publish(PubsubMessage {
+                data: body.into_bytes(),
+                ..Default::default()
+            })
+            .await;
+        awaiter
+            .get()
+            .await
+            .map_err(|error| DomainError::PubSubPublishError {
+                reason: format!("Pub/Sub publish failed: {error}"),
+            })?;
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
-    use uuid::Uuid;
+    use super::{default_topic_mapping, resolve_topic_from_mapping};
 
-    use super::PubSubEventPublisher;
-    use crate::{
-        acl::messaging::EventPublisherPort, infrastructure::messaging::PubSubEventEnvelope,
-    };
+    #[test]
+    fn default_mapping_covers_known_event_types() {
+        let mapping = default_topic_mapping();
+        assert_eq!(
+            mapping.get("ipo-info-updated").map(String::as_str),
+            Some("ipo-info-updated")
+        );
+        assert_eq!(
+            mapping.get("ApplicationCompleted").map(String::as_str),
+            Some("ipo-notification")
+        );
+        assert_eq!(
+            mapping.get("ImageAuthenticationFailed").map(String::as_str),
+            Some("ipo-notification")
+        );
+    }
 
-    #[tokio::test]
-    async fn publishes_serialized_envelope_with_expected_metadata() {
-        let publisher = PubSubEventPublisher::new("ipo-service");
-        let correlation_id = Uuid::new_v4();
+    #[test]
+    fn resolve_topic_maps_known_event_to_topic() {
+        let mapping = default_topic_mapping();
+        let topic =
+            resolve_topic_from_mapping(&mapping, "ipo-info-updated").expect("mapping exists");
+        assert_eq!(topic, "ipo-info-updated");
+    }
 
-        publisher
-            .publish(
-                "ipo-info-updated",
-                "stock-1",
-                "IpoStock",
-                json!({ "companyName": "テスト株式会社" }),
-                Some(correlation_id),
-            )
-            .await
-            .expect("publish");
-
-        let messages = publisher.published_messages().await.expect("messages");
-        assert_eq!(messages.len(), 1);
-
-        let envelope: PubSubEventEnvelope<serde_json::Value> =
-            serde_json::from_str(&messages[0]).expect("envelope");
-        assert_eq!(envelope.event_type, "ipo-info-updated");
-        assert_eq!(envelope.aggregate_id, "stock-1");
-        assert_eq!(envelope.aggregate_type, "IpoStock");
-        assert_eq!(envelope.metadata.service_name, "ipo-service");
-        assert_eq!(envelope.metadata.version, 1);
-        assert_eq!(envelope.metadata.correlation_id, correlation_id);
-        assert_eq!(envelope.payload["companyName"], "テスト株式会社");
+    #[test]
+    fn resolve_topic_surfaces_missing_mapping_as_pubsub_error() {
+        let mut mapping = default_topic_mapping();
+        mapping.remove("ipo-info-updated");
+        let result = resolve_topic_from_mapping(&mapping, "ipo-info-updated");
+        assert!(result.is_err());
     }
 }

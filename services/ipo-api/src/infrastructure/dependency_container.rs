@@ -14,16 +14,19 @@ use ipo_backend_shared::{
     },
     errors::DomainError,
     infrastructure::{
-        firestore::repositories::{
-            FirestoreExclusionRepository, FirestoreIpoStockRepository,
-            FirestoreLotteryApplicationRepository, FirestoreNotificationSettingRepository,
-            FirestoreOperationLogRepository, FirestoreSecuritiesAccountRepository,
+        firestore::{
+            build_firestore_client,
+            repositories::{
+                FirestoreExclusionRepository, FirestoreIpoStockRepository,
+                FirestoreLotteryApplicationRepository, FirestoreNotificationSettingRepository,
+                FirestoreOperationLogRepository, FirestoreSecuritiesAccountRepository,
+            },
         },
         http_client::{HttpClientConfig, ReqwestClientFactory},
         notification::{
             EmailNotificationAdapter, LineNotificationAdapter, SlackNotificationAdapter,
         },
-        secrets::{sendgrid_api_key_secret_name, InMemoryCredentialStore},
+        secrets::{build_credential_store, sendgrid_api_key_secret_name},
     },
 };
 
@@ -46,15 +49,18 @@ pub struct DependencyContainer {
 impl DependencyContainer {
     pub async fn new() -> Result<Self, DomainError> {
         let client = ReqwestClientFactory::new(HttpClientConfig::default()).build()?;
-        let credential_store = InMemoryCredentialStore::new();
+        let credential_store_port: Arc<dyn CredentialStorePort> =
+            build_credential_store(&config::firebase_project_id()).await?;
         if let Some(sendgrid_api_key) = config::sendgrid_api_key() {
-            credential_store
+            credential_store_port
                 .save(sendgrid_api_key_secret_name(), &sendgrid_api_key)
                 .await?;
         }
+        let db = Arc::new(build_firestore_client(&config::firebase_project_id()).await?);
 
-        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
-            as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let notification_setting_repository =
+            Arc::new(FirestoreNotificationSettingRepository::new(db.clone()))
+                as Arc<dyn NotificationSettingRepository + Send + Sync>;
 
         let line_adapter = Arc::new(LineNotificationAdapter::new_with_endpoint(
             client.clone(),
@@ -62,7 +68,7 @@ impl DependencyContainer {
         )) as Arc<dyn NotificationPort + Send + Sync>;
         let email_adapter = Arc::new(EmailNotificationAdapter::new_with_endpoint(
             client.clone(),
-            credential_store.clone(),
+            credential_store_port.clone(),
             config::notification_from_address(),
             config::sendgrid_endpoint(),
         )) as Arc<dyn NotificationPort + Send + Sync>;
@@ -70,14 +76,15 @@ impl DependencyContainer {
             as Arc<dyn NotificationPort + Send + Sync>;
 
         Self::from_components(
-            Arc::new(FirestoreIpoStockRepository::new()),
-            Arc::new(FirestoreExclusionRepository::new()),
-            Arc::new(FirestoreLotteryApplicationRepository::new()),
+            Arc::new(FirestoreIpoStockRepository::new(db.clone())),
+            Arc::new(FirestoreExclusionRepository::new(db.clone())),
+            Arc::new(FirestoreLotteryApplicationRepository::new(db.clone())),
             Arc::new(FirestoreSecuritiesAccountRepository::new(
-                credential_store.clone(),
+                db.clone(),
+                credential_store_port,
             )),
             notification_setting_repository,
-            Arc::new(FirestoreOperationLogRepository::new()),
+            Arc::new(FirestoreOperationLogRepository::new(db)),
             Arc::new(BrowserServiceClient::new(
                 client,
                 config::ipo_browser_base_url(),

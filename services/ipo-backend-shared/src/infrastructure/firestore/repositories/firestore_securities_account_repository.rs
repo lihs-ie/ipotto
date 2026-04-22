@@ -1,7 +1,7 @@
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use firestore::{path, FirestoreDb};
 
 use crate::{
     acl::secrets::CredentialStorePort,
@@ -11,26 +11,25 @@ use crate::{
     errors::DomainError,
     infrastructure::{
         firestore::{
-            documents::SecuritiesAccountDocument, payloads::AccountCredentialSecretPayload,
+            collections, documents::SecuritiesAccountDocument,
+            payloads::AccountCredentialSecretPayload,
         },
         secrets::account_credential_secret_name,
     },
 };
 
-/// Concrete securities account repository with Firestore-oriented document mapping.
+/// Production Firestore-backed implementation of
+/// [`SecuritiesAccountRepository`]. Stores the non-sensitive document
+/// shape in the `securities_accounts` collection and offloads the
+/// AES-256 credential payload to the injected [`CredentialStorePort`],
+/// which in production resolves to Google Secret Manager.
 #[derive(Clone)]
-pub struct FirestoreSecuritiesAccountRepository<S>
-where
-    S: CredentialStorePort,
-{
-    documents: Arc<Mutex<BTreeMap<String, SecuritiesAccountDocument>>>,
-    credential_store: S,
+pub struct FirestoreSecuritiesAccountRepository {
+    db: Arc<FirestoreDb>,
+    credential_store: Arc<dyn CredentialStorePort>,
 }
 
-impl<S> core::fmt::Debug for FirestoreSecuritiesAccountRepository<S>
-where
-    S: CredentialStorePort,
-{
+impl core::fmt::Debug for FirestoreSecuritiesAccountRepository {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         formatter
             .debug_struct("FirestoreSecuritiesAccountRepository")
@@ -38,47 +37,50 @@ where
     }
 }
 
-impl<S> FirestoreSecuritiesAccountRepository<S>
-where
-    S: CredentialStorePort,
-{
-    pub fn new(credential_store: S) -> Self {
+impl FirestoreSecuritiesAccountRepository {
+    pub fn new(db: Arc<FirestoreDb>, credential_store: Arc<dyn CredentialStorePort>) -> Self {
         Self {
-            documents: Arc::new(Mutex::new(BTreeMap::new())),
+            db,
             credential_store,
         }
     }
-}
 
-#[async_trait::async_trait]
-impl<S> SecuritiesAccountRepository for FirestoreSecuritiesAccountRepository<S>
-where
-    S: CredentialStorePort + 'static,
-{
-    async fn find_by_id(
+    async fn read_credential(
         &self,
-        identifier: &SecuritiesAccountIdentifier,
-    ) -> Result<Option<SecuritiesAccount>, DomainError> {
-        let document = self
-            .documents
-            .lock()
-            .map_err(|error| DomainError::FirestoreMappingError {
-                reason: error.to_string(),
-            })?
-            .get(identifier.value())
-            .cloned();
-        let Some(document) = document else {
-            return Ok(None);
-        };
+        document: &SecuritiesAccountDocument,
+    ) -> Result<AccountCredentialSecretPayload, DomainError> {
         let payload = self
             .credential_store
             .get(&document.credential_secret_key)
             .await?;
-        let payload: AccountCredentialSecretPayload =
-            serde_json::from_str(&payload).map_err(|error| DomainError::SecretPayloadError {
-                reason: error.to_string(),
-            })?;
-        Ok(Some(document.to_domain(payload.to_domain()?)?))
+        serde_json::from_str(&payload).map_err(|error| DomainError::SecretPayloadError {
+            reason: error.to_string(),
+        })
+    }
+}
+
+#[async_trait]
+impl SecuritiesAccountRepository for FirestoreSecuritiesAccountRepository {
+    async fn find_by_id(
+        &self,
+        identifier: &SecuritiesAccountIdentifier,
+    ) -> Result<Option<SecuritiesAccount>, DomainError> {
+        let document: Option<SecuritiesAccountDocument> = self
+            .db
+            .fluent()
+            .select()
+            .by_id_in(collections::SECURITIES_ACCOUNTS)
+            .obj()
+            .one(identifier.value().to_string())
+            .await
+            .map_err(map_firestore_error)?;
+        match document {
+            Some(document) => {
+                let payload = self.read_credential(&document).await?;
+                Ok(Some(document.to_domain(payload.to_domain()?)?))
+            }
+            None => Ok(None),
+        }
     }
 
     async fn save(&self, account: &SecuritiesAccount) -> Result<(), DomainError> {
@@ -90,157 +92,91 @@ where
             reason: error.to_string(),
         })?;
         self.credential_store.save(&secret_key, &payload).await?;
-        self.documents
-            .lock()
-            .map_err(|error| DomainError::FirestoreMappingError {
-                reason: error.to_string(),
-            })?
-            .insert(
-                account.identifier().value().to_string(),
-                SecuritiesAccountDocument::from_domain(account, secret_key),
-            );
+        let document = SecuritiesAccountDocument::from_domain(account, secret_key);
+        self.db
+            .fluent()
+            .update()
+            .in_col(collections::SECURITIES_ACCOUNTS)
+            .document_id(account.identifier().value())
+            .object(&document)
+            .execute::<()>()
+            .await
+            .map_err(map_firestore_error)?;
         Ok(())
     }
 
     async fn delete(&self, identifier: &SecuritiesAccountIdentifier) -> Result<(), DomainError> {
-        let document = self
-            .documents
-            .lock()
-            .map_err(|error| DomainError::FirestoreMappingError {
-                reason: error.to_string(),
-            })?
-            .get(identifier.value())
-            .cloned();
+        let document: Option<SecuritiesAccountDocument> = self
+            .db
+            .fluent()
+            .select()
+            .by_id_in(collections::SECURITIES_ACCOUNTS)
+            .obj()
+            .one(identifier.value().to_string())
+            .await
+            .map_err(map_firestore_error)?;
         if let Some(document) = document {
             self.credential_store
                 .delete(&document.credential_secret_key)
                 .await?;
-            self.documents
-                .lock()
-                .map_err(|error| DomainError::FirestoreMappingError {
-                    reason: error.to_string(),
-                })?
-                .remove(identifier.value());
+            self.db
+                .fluent()
+                .delete()
+                .from(collections::SECURITIES_ACCOUNTS)
+                .document_id(identifier.value())
+                .execute()
+                .await
+                .map_err(map_firestore_error)?;
         }
         Ok(())
     }
 
     async fn find_all(&self) -> Result<Vec<SecuritiesAccount>, DomainError> {
         let documents: Vec<SecuritiesAccountDocument> = self
-            .documents
-            .lock()
-            .map_err(|error| DomainError::FirestoreMappingError {
-                reason: error.to_string(),
-            })?
-            .values()
-            .cloned()
-            .collect();
+            .db
+            .fluent()
+            .select()
+            .from(collections::SECURITIES_ACCOUNTS)
+            .obj::<SecuritiesAccountDocument>()
+            .query()
+            .await
+            .map_err(map_firestore_error)?;
 
         let mut accounts = Vec::with_capacity(documents.len());
         for document in documents {
-            let payload = self
-                .credential_store
-                .get(&document.credential_secret_key)
-                .await?;
-            let payload: AccountCredentialSecretPayload =
-                serde_json::from_str(&payload).map_err(|error| {
-                    DomainError::SecretPayloadError {
-                        reason: error.to_string(),
-                    }
-                })?;
+            let payload = self.read_credential(&document).await?;
             accounts.push(document.to_domain(payload.to_domain()?)?);
         }
         Ok(accounts)
     }
 
     async fn find_active(&self) -> Result<Vec<SecuritiesAccount>, DomainError> {
-        self.find_all().await.map(|accounts| {
-            accounts
-                .into_iter()
-                .filter(|account| account.activation().is_active())
-                .collect()
-        })
+        let documents: Vec<SecuritiesAccountDocument> = self
+            .db
+            .fluent()
+            .select()
+            .from(collections::SECURITIES_ACCOUNTS)
+            .filter(|q| {
+                q.for_all([q
+                    .field(path!(SecuritiesAccountDocument::is_active))
+                    .eq(true)])
+            })
+            .obj::<SecuritiesAccountDocument>()
+            .query()
+            .await
+            .map_err(map_firestore_error)?;
+
+        let mut accounts = Vec::with_capacity(documents.len());
+        for document in documents {
+            let payload = self.read_credential(&document).await?;
+            accounts.push(document.to_domain(payload.to_domain()?)?);
+        }
+        Ok(accounts)
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use chrono::{TimeZone, Utc};
-
-    use super::FirestoreSecuritiesAccountRepository;
-    use crate::{
-        acl::secrets::CredentialStorePort,
-        domain::account::{
-            AccountCredential, ImapHost, ImapPort, LoginId, LoginPassword, MailAddress,
-            MailCredential, MailPassword, SecuritiesAccount, SecuritiesAccountRepository,
-            SecuritiesCompany, TradingPassword,
-        },
-        infrastructure::secrets::{account_credential_secret_name, InMemoryCredentialStore},
-    };
-
-    fn build_account(active: bool) -> SecuritiesAccount {
-        let mut account = SecuritiesAccount::create(
-            SecuritiesCompany::Rakuten,
-            AccountCredential::new(
-                LoginId::new("login").expect("login id"),
-                LoginPassword::new("password").expect("login password"),
-                TradingPassword::new("1234").expect("trading password"),
-                MailCredential::new(
-                    MailAddress::new("test@example.com").expect("mail"),
-                    MailPassword::new("mail-password").expect("mail password"),
-                    ImapHost::new("imap.example.com").expect("host"),
-                    ImapPort::new(993).expect("port"),
-                )
-                .expect("mail credential"),
-            )
-            .expect("credential"),
-        )
-        .expect("account");
-        if !active {
-            account.deactivate();
-        }
-        account.record_test_result(crate::domain::account::ConnectionTestResult::new(
-            true,
-            "ok",
-            Utc.with_ymd_and_hms(2026, 4, 1, 9, 0, 0)
-                .single()
-                .expect("tested at"),
-        ));
-        account
-    }
-
-    #[tokio::test]
-    async fn saves_accounts_and_removes_secret_on_delete() {
-        let credential_store = InMemoryCredentialStore::new();
-        let repository = FirestoreSecuritiesAccountRepository::new(credential_store.clone());
-        let active = build_account(true);
-        let inactive = build_account(false);
-
-        repository.save(&active).await.expect("save active");
-        repository.save(&inactive).await.expect("save inactive");
-
-        assert_eq!(repository.find_all().await.expect("find all").len(), 2);
-        assert_eq!(
-            repository.find_active().await.expect("find active").len(),
-            1
-        );
-        assert!(credential_store
-            .exists(&account_credential_secret_name(active.identifier()))
-            .await
-            .expect("secret exists"));
-
-        repository
-            .delete(active.identifier())
-            .await
-            .expect("delete");
-        assert!(repository
-            .find_by_id(active.identifier())
-            .await
-            .expect("find")
-            .is_none());
-        assert!(!credential_store
-            .exists(&account_credential_secret_name(active.identifier()))
-            .await
-            .expect("secret removed"));
+fn map_firestore_error(error: firestore::errors::FirestoreError) -> DomainError {
+    DomainError::FirestoreMappingError {
+        reason: error.to_string(),
     }
 }

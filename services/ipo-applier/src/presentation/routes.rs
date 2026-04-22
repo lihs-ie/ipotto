@@ -44,9 +44,10 @@ mod tests {
         },
         errors::DomainError,
         testing::{
-            FirestoreExclusionRepository, FirestoreIpoStockRepository,
-            FirestoreLotteryApplicationRepository, FirestoreOperationLogRepository,
-            FirestoreSecuritiesAccountRepository, InMemoryCredentialStore, PubSubEventPublisher,
+            FirestoreExclusionRepositoryInMemory, FirestoreIpoStockRepositoryInMemory,
+            FirestoreLotteryApplicationRepositoryInMemory, FirestoreOperationLogRepositoryInMemory,
+            FirestoreSecuritiesAccountRepositoryInMemory, InMemoryCredentialStore,
+            PubSubEventPublisherInMemory,
         },
     };
     use serde_json::Value;
@@ -148,12 +149,13 @@ mod tests {
     #[tokio::test]
     async fn handles_pubsub_apply_request_with_explicit_target_date() {
         let credential_store = InMemoryCredentialStore::new();
-        let account_repository =
-            Arc::new(FirestoreSecuritiesAccountRepository::new(credential_store));
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new());
-        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-applier"));
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
+            credential_store,
+        ));
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
+        let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new());
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-applier"));
 
         account_repository
             .save(&build_account())
@@ -171,7 +173,7 @@ mod tests {
             exclusion_repository,
             Arc::new(SucceedingBrowser),
             event_publisher.clone(),
-            Arc::new(FirestoreOperationLogRepository::new()),
+            Arc::new(FirestoreOperationLogRepositoryInMemory::new()),
         ));
 
         let response = app
@@ -210,12 +212,13 @@ mod tests {
         // with the current test run date, the use case should simply produce an
         // empty result without failing — that is the contract we verify.
         let credential_store = InMemoryCredentialStore::new();
-        let account_repository =
-            Arc::new(FirestoreSecuritiesAccountRepository::new(credential_store));
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new());
-        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-applier"));
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
+            credential_store,
+        ));
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
+        let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new());
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-applier"));
 
         account_repository
             .save(&build_account())
@@ -233,7 +236,7 @@ mod tests {
             exclusion_repository,
             Arc::new(SucceedingBrowser),
             event_publisher,
-            Arc::new(FirestoreOperationLogRepository::new()),
+            Arc::new(FirestoreOperationLogRepositoryInMemory::new()),
         ));
 
         let response = app

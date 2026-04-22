@@ -19,6 +19,7 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 ulid = "1"
 
 [dev-dependencies]
+ipo-backend-shared = { path = "../ipo-backend-shared", features = ["test-support"] }
 rand = "0.8"
 rsa = { version = "0.9", features = ["pem"] }
 tower = "0.5"

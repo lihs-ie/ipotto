@@ -43,9 +43,9 @@ mod tests {
         },
         errors::DomainError,
         testing::{
-            FirestoreIpoStockRepository, FirestoreLotteryApplicationRepository,
-            FirestoreOperationLogRepository, FirestoreSecuritiesAccountRepository,
-            InMemoryCredentialStore, PubSubEventPublisher,
+            FirestoreIpoStockRepositoryInMemory, FirestoreLotteryApplicationRepositoryInMemory,
+            FirestoreOperationLogRepositoryInMemory, FirestoreSecuritiesAccountRepositoryInMemory,
+            InMemoryCredentialStore, PubSubEventPublisherInMemory,
         },
     };
     use serde_json::Value;
@@ -142,11 +142,12 @@ mod tests {
     #[tokio::test]
     async fn handles_pubsub_check_request() {
         let credential_store = InMemoryCredentialStore::new();
-        let account_repository =
-            Arc::new(FirestoreSecuritiesAccountRepository::new(credential_store));
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-result-checker"));
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
+            credential_store,
+        ));
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-result-checker"));
 
         let account = build_account();
         let stock = build_stock();
@@ -178,7 +179,7 @@ mod tests {
             account_repository,
             Arc::new(WinningBrowser),
             event_publisher.clone(),
-            Arc::new(FirestoreOperationLogRepository::new()),
+            Arc::new(FirestoreOperationLogRepositoryInMemory::new()),
         ));
 
         let response = app
@@ -221,11 +222,12 @@ mod tests {
     async fn handles_pubsub_check_request_with_emulated_browser_service() {
         let browser_server = MockServer::start().await;
         let credential_store = InMemoryCredentialStore::new();
-        let account_repository =
-            Arc::new(FirestoreSecuritiesAccountRepository::new(credential_store));
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-result-checker"));
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
+            credential_store,
+        ));
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-result-checker"));
 
         let account = build_account();
         let stock = build_stock();
@@ -276,7 +278,7 @@ mod tests {
                 browser_server.uri(),
             )),
             event_publisher.clone(),
-            Arc::new(FirestoreOperationLogRepository::new()),
+            Arc::new(FirestoreOperationLogRepositoryInMemory::new()),
         ));
 
         let response = app
@@ -319,11 +321,12 @@ mod tests {
     async fn continues_without_publish_when_browser_service_fails() {
         let browser_server = MockServer::start().await;
         let credential_store = InMemoryCredentialStore::new();
-        let account_repository =
-            Arc::new(FirestoreSecuritiesAccountRepository::new(credential_store));
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-result-checker"));
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
+            credential_store,
+        ));
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-result-checker"));
 
         let account = build_account();
         let stock = build_stock();
@@ -364,7 +367,7 @@ mod tests {
                 browser_server.uri(),
             )),
             event_publisher.clone(),
-            Arc::new(FirestoreOperationLogRepository::new()),
+            Arc::new(FirestoreOperationLogRepositoryInMemory::new()),
         ));
 
         let response = app

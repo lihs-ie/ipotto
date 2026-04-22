@@ -222,9 +222,9 @@ mod tests {
         errors::DomainError,
         infrastructure::messaging::PubSubEventEnvelope,
         testing::{
-            FirestoreIpoStockRepository, FirestoreLotteryApplicationRepository,
-            FirestoreOperationLogRepository, FirestoreSecuritiesAccountRepository,
-            InMemoryCredentialStore, PubSubEventPublisher,
+            FirestoreIpoStockRepositoryInMemory, FirestoreLotteryApplicationRepositoryInMemory,
+            FirestoreOperationLogRepositoryInMemory, FirestoreSecuritiesAccountRepositoryInMemory,
+            InMemoryCredentialStore, PubSubEventPublisherInMemory,
         },
     };
     use uuid::Uuid;
@@ -334,12 +334,13 @@ mod tests {
     #[tokio::test]
     async fn records_result_and_publishes_event() {
         let credential_store = InMemoryCredentialStore::new();
-        let account_repository =
-            Arc::new(FirestoreSecuritiesAccountRepository::new(credential_store));
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-result-checker"));
-        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new());
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
+            credential_store,
+        ));
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-result-checker"));
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepositoryInMemory::new());
 
         let account = build_account();
         let stock = build_stock();
@@ -413,11 +414,12 @@ mod tests {
     #[tokio::test]
     async fn continues_when_event_publish_fails_after_persisting_result() {
         let credential_store = InMemoryCredentialStore::new();
-        let account_repository =
-            Arc::new(FirestoreSecuritiesAccountRepository::new(credential_store));
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new());
-        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new());
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
+            credential_store,
+        ));
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepositoryInMemory::new());
 
         let account = build_account();
         let stock = build_stock();

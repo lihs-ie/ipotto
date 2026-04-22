@@ -31,7 +31,8 @@ mod tests {
             ExternalSiteScraperAdapter, FallbackScraperAdapter, SecuritiesSiteScraperAdapter,
         },
         testing::{
-            FirestoreIpoStockRepository, FirestoreOperationLogRepository, PubSubEventPublisher,
+            FirestoreIpoStockRepositoryInMemory, FirestoreOperationLogRepositoryInMemory,
+            PubSubEventPublisherInMemory,
         },
     };
     use serde_json::Value;
@@ -60,8 +61,8 @@ mod tests {
 
     #[tokio::test]
     async fn handles_pubsub_fetch_request() {
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-info-fetcher"));
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-info-fetcher"));
         let app = create_router(DependencyContainer::from_components(
             stock_repository.clone(),
             Arc::new(StaticScraper {
@@ -82,7 +83,7 @@ mod tests {
                 )],
             }),
             event_publisher.clone(),
-            Arc::new(FirestoreOperationLogRepository::new()),
+            Arc::new(FirestoreOperationLogRepositoryInMemory::new()),
         ));
 
         let response = app
@@ -160,13 +161,13 @@ mod tests {
                 browser_server.uri(),
             )),
         );
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-info-fetcher"));
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-info-fetcher"));
         let app = create_router(DependencyContainer::from_components(
             stock_repository.clone(),
             Arc::new(scraper),
             event_publisher.clone(),
-            Arc::new(FirestoreOperationLogRepository::new()),
+            Arc::new(FirestoreOperationLogRepositoryInMemory::new()),
         ));
 
         let response = app
@@ -234,13 +235,13 @@ mod tests {
                 browser_server.uri(),
             )),
         );
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-info-fetcher"));
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-info-fetcher"));
         let app = create_router(DependencyContainer::from_components(
             stock_repository.clone(),
             Arc::new(scraper),
             event_publisher.clone(),
-            Arc::new(FirestoreOperationLogRepository::new()),
+            Arc::new(FirestoreOperationLogRepositoryInMemory::new()),
         ));
 
         let response = app

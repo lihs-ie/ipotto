@@ -1,7 +1,7 @@
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use firestore::{path, FirestoreDb};
 
 use crate::{
     domain::{
@@ -13,48 +13,52 @@ use crate::{
         stock::StockIdentifier,
     },
     errors::DomainError,
-    infrastructure::firestore::documents::LotteryApplicationDocument,
+    infrastructure::firestore::{collections, documents::LotteryApplicationDocument},
 };
 
-/// Concrete lottery application repository with Firestore-oriented document mapping.
-#[derive(Debug, Clone, Default)]
+/// Production Firestore-backed implementation of
+/// [`LotteryApplicationRepository`]. Persists aggregates to the
+/// `lottery_applications` collection.
+#[derive(Debug, Clone)]
 pub struct FirestoreLotteryApplicationRepository {
-    documents: Arc<Mutex<BTreeMap<String, LotteryApplicationDocument>>>,
+    db: Arc<FirestoreDb>,
 }
 
 impl FirestoreLotteryApplicationRepository {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(db: Arc<FirestoreDb>) -> Self {
+        Self { db }
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl LotteryApplicationRepository for FirestoreLotteryApplicationRepository {
     async fn find_by_id(
         &self,
         identifier: &ApplicationIdentifier,
     ) -> Result<Option<LotteryApplication>, DomainError> {
-        self.documents
-            .lock()
-            .map_err(|error| DomainError::FirestoreMappingError {
-                reason: error.to_string(),
-            })?
-            .get(identifier.value())
-            .cloned()
-            .map(|document| document.to_domain())
-            .transpose()
+        let document: Option<LotteryApplicationDocument> = self
+            .db
+            .fluent()
+            .select()
+            .by_id_in(collections::LOTTERY_APPLICATIONS)
+            .obj()
+            .one(identifier.value().to_string())
+            .await
+            .map_err(map_firestore_error)?;
+        document.map(|document| document.to_domain()).transpose()
     }
 
     async fn save(&self, application: &LotteryApplication) -> Result<(), DomainError> {
-        self.documents
-            .lock()
-            .map_err(|error| DomainError::FirestoreMappingError {
-                reason: error.to_string(),
-            })?
-            .insert(
-                application.identifier().value().to_string(),
-                LotteryApplicationDocument::from_domain(application),
-            );
+        let document = LotteryApplicationDocument::from_domain(application);
+        self.db
+            .fluent()
+            .update()
+            .in_col(collections::LOTTERY_APPLICATIONS)
+            .document_id(application.identifier().value())
+            .object(&document)
+            .execute::<()>()
+            .await
+            .map_err(map_firestore_error)?;
         Ok(())
     }
 
@@ -62,13 +66,23 @@ impl LotteryApplicationRepository for FirestoreLotteryApplicationRepository {
         &self,
         stock: &StockIdentifier,
     ) -> Result<Vec<LotteryApplication>, DomainError> {
-        self.documents
-            .lock()
-            .map_err(|error| DomainError::FirestoreMappingError {
-                reason: error.to_string(),
-            })?
-            .values()
-            .filter(|document| document.stock == stock.value())
+        let stock_value = stock.value().to_string();
+        let documents: Vec<LotteryApplicationDocument> = self
+            .db
+            .fluent()
+            .select()
+            .from(collections::LOTTERY_APPLICATIONS)
+            .filter(|q| {
+                q.for_all([q
+                    .field(path!(LotteryApplicationDocument::stock))
+                    .eq(&stock_value)])
+            })
+            .obj::<LotteryApplicationDocument>()
+            .query()
+            .await
+            .map_err(map_firestore_error)?;
+        documents
+            .into_iter()
             .map(|document| document.to_domain())
             .collect()
     }
@@ -77,13 +91,23 @@ impl LotteryApplicationRepository for FirestoreLotteryApplicationRepository {
         &self,
         status: ApplicationStatus,
     ) -> Result<Vec<LotteryApplication>, DomainError> {
-        self.documents
-            .lock()
-            .map_err(|error| DomainError::FirestoreMappingError {
-                reason: error.to_string(),
-            })?
-            .values()
-            .filter(|document| document.status == status)
+        let status_value = status.as_str().to_string();
+        let documents: Vec<LotteryApplicationDocument> = self
+            .db
+            .fluent()
+            .select()
+            .from(collections::LOTTERY_APPLICATIONS)
+            .filter(|q| {
+                q.for_all([q
+                    .field(path!(LotteryApplicationDocument::status))
+                    .eq(&status_value)])
+            })
+            .obj::<LotteryApplicationDocument>()
+            .query()
+            .await
+            .map_err(map_firestore_error)?;
+        documents
+            .into_iter()
             .map(|document| document.to_domain())
             .collect()
     }
@@ -93,83 +117,31 @@ impl LotteryApplicationRepository for FirestoreLotteryApplicationRepository {
         stock: &StockIdentifier,
         account: &SecuritiesAccountIdentifier,
     ) -> Result<bool, DomainError> {
-        Ok(self
-            .documents
-            .lock()
-            .map_err(|error| DomainError::FirestoreMappingError {
-                reason: error.to_string(),
-            })?
-            .values()
-            .any(|document| {
-                document.stock == stock.value() && document.securities_account == account.value()
-            }))
+        let stock_value = stock.value().to_string();
+        let account_value = account.value().to_string();
+        let documents: Vec<LotteryApplicationDocument> = self
+            .db
+            .fluent()
+            .select()
+            .from(collections::LOTTERY_APPLICATIONS)
+            .filter(|q| {
+                q.for_all([
+                    q.field(path!(LotteryApplicationDocument::stock))
+                        .eq(&stock_value),
+                    q.field(path!(LotteryApplicationDocument::securities_account))
+                        .eq(&account_value),
+                ])
+            })
+            .obj::<LotteryApplicationDocument>()
+            .query()
+            .await
+            .map_err(map_firestore_error)?;
+        Ok(!documents.is_empty())
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use chrono::{TimeZone, Utc};
-
-    use super::FirestoreLotteryApplicationRepository;
-    use crate::domain::stock::{Shares, Yen};
-    use crate::domain::{
-        account::SecuritiesAccountIdentifier,
-        application::{ApplicationStatus, LotteryApplication, LotteryApplicationRepository},
-        stock::StockIdentifier,
-    };
-
-    fn build_application(
-        stock: StockIdentifier,
-        account: SecuritiesAccountIdentifier,
-        applied: bool,
-    ) -> LotteryApplication {
-        let mut application = LotteryApplication::create_with_values(
-            stock,
-            account,
-            Shares::new(100).expect("shares"),
-            Yen::new(1400).expect("price"),
-            Utc.with_ymd_and_hms(2026, 4, 5, 10, 0, 0)
-                .single()
-                .expect("ordered at"),
-        )
-        .expect("application");
-        if applied {
-            application.apply().expect("apply");
-        }
-        application
-    }
-
-    #[tokio::test]
-    async fn filters_lottery_applications() {
-        let repository = FirestoreLotteryApplicationRepository::new();
-        let stock = StockIdentifier::generate();
-        let account = SecuritiesAccountIdentifier::generate();
-        let pending = build_application(stock.clone(), account.clone(), false);
-        let applied =
-            build_application(stock.clone(), SecuritiesAccountIdentifier::generate(), true);
-
-        repository.save(&pending).await.expect("save pending");
-        repository.save(&applied).await.expect("save applied");
-
-        assert_eq!(
-            repository
-                .find_by_stock(&stock)
-                .await
-                .expect("by stock")
-                .len(),
-            2
-        );
-        assert_eq!(
-            repository
-                .find_by_status(ApplicationStatus::Applied)
-                .await
-                .expect("by status")
-                .len(),
-            1
-        );
-        assert!(repository
-            .exists_by_stock_and_account(&stock, &account)
-            .await
-            .expect("exists"));
+fn map_firestore_error(error: firestore::errors::FirestoreError) -> DomainError {
+    DomainError::FirestoreMappingError {
+        reason: error.to_string(),
     }
 }
