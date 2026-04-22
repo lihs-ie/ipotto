@@ -8,13 +8,18 @@
   "exports": {
     ".": "./src/index.ts",
     "./domain/*": "./src/domain/*",
+    "./api/*": "./src/api/*",
     "./application/*": "./src/application/*",
     "./infrastructure/*": "./src/infrastructure/*"
+  },
+  "scripts": {
+    "test": "vitest"
   },
   "dependencies": {
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.0"
   }
 }

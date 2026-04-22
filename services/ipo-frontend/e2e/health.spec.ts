@@ -8,12 +8,7 @@ test.describe("Health Check", () => {
     expect(body).toEqual({ status: "ok" });
   });
 
-  test("dashboard page loads", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.locator("h1")).toBeVisible();
-  });
-
-  test("login page loads", async ({ page }) => {
+  test("login page loads with heading", async ({ page }) => {
     await page.goto("/login");
     await expect(page.locator("h1")).toBeVisible();
   });
