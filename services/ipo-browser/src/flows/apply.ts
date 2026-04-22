@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import type { Page } from "playwright";
 
+import { logger } from "../logger.js";
+
 import {
   allSelectors,
   loadSelectors,
@@ -153,7 +155,7 @@ export async function rakutenApply(
     return await classifyResultPage(page, selectors.applyResult);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    console.error("rakutenApply threw", error);
+    logger.error({ event: "flows.apply.exception", error: reason });
     const screenshotPath = await tryScreenshot(page, "apply-exception");
     return { status: "failure", reason, screenshotPath };
   }

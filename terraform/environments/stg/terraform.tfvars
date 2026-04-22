@@ -98,6 +98,12 @@ pubsub_topics = {
 scheduler_jobs    = {}
 secret_containers = {}
 
+observability = {
+  alert_email_recipients = ["ops@example.com"]
+  error_rate_threshold   = 10
+  restart_threshold      = 3
+}
+
 enable_firestore = false
 
 firestore = {

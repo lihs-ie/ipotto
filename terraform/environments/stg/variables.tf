@@ -137,3 +137,12 @@ variable "firestore" {
     })), {})
   })
 }
+
+variable "observability" {
+  description = "Cloud Monitoring / Logging 設定。"
+  type = object({
+    alert_email_recipients = list(string)
+    error_rate_threshold   = optional(number, 10)
+    restart_threshold      = optional(number, 3)
+  })
+}
