@@ -157,8 +157,12 @@ mod tests {
 
         account_repository
             .save(&build_account())
+            .await
             .expect("save account");
-        stock_repository.save(&build_stock()).expect("save stock");
+        stock_repository
+            .save(&build_stock())
+            .await
+            .expect("save stock");
 
         let app = create_router(DependencyContainer::from_components(
             application_repository,
@@ -215,8 +219,12 @@ mod tests {
 
         account_repository
             .save(&build_account())
+            .await
             .expect("save account");
-        stock_repository.save(&build_stock()).expect("save stock");
+        stock_repository
+            .save(&build_stock())
+            .await
+            .expect("save stock");
 
         let app = create_router(DependencyContainer::from_components(
             application_repository,

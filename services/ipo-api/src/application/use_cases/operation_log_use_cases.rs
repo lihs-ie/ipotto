@@ -46,7 +46,7 @@ impl ListOperationLogsUseCase {
         Self { repository }
     }
 
-    pub fn execute(
+    pub async fn execute(
         &self,
         input: ListOperationLogsInput,
     ) -> Result<ListOperationLogsOutput, DomainError> {
@@ -64,14 +64,18 @@ impl ListOperationLogsUseCase {
 
         let mut logs = match (start, end, event_type) {
             (Some(start), Some(end), Some(event_type)) => {
-                let mut logs = self.repository.find_by_date_range(start, end)?;
+                let mut logs = self.repository.find_by_date_range(start, end).await?;
                 logs.retain(|log| log.event_type() == event_type);
                 logs
             }
-            (Some(start), Some(end), None) => self.repository.find_by_date_range(start, end)?,
-            (None, None, Some(event_type)) => self.repository.find_by_event_type(event_type)?,
+            (Some(start), Some(end), None) => {
+                self.repository.find_by_date_range(start, end).await?
+            }
+            (None, None, Some(event_type)) => {
+                self.repository.find_by_event_type(event_type).await?
+            }
             (start, end, event_type) => {
-                let mut logs = self.repository.find_all()?;
+                let mut logs = self.repository.find_all().await?;
                 if let Some(start) = start {
                     logs.retain(|log| log.executed_at() >= start);
                 }
@@ -199,17 +203,23 @@ mod tests {
         }
     }
 
+    #[async_trait::async_trait]
     impl OperationLogRepository for CountingRepository {
-        fn save(&self, _log: &OperationLog) -> Result<(), ipo_backend_shared::errors::DomainError> {
+        async fn save(
+            &self,
+            _log: &OperationLog,
+        ) -> Result<(), ipo_backend_shared::errors::DomainError> {
             Ok(())
         }
 
-        fn find_all(&self) -> Result<Vec<OperationLog>, ipo_backend_shared::errors::DomainError> {
+        async fn find_all(
+            &self,
+        ) -> Result<Vec<OperationLog>, ipo_backend_shared::errors::DomainError> {
             self.find_all_calls.fetch_add(1, Ordering::SeqCst);
             Ok(self.logs.clone())
         }
 
-        fn find_by_date_range(
+        async fn find_by_date_range(
             &self,
             start: chrono::DateTime<Utc>,
             end: chrono::DateTime<Utc>,
@@ -223,7 +233,7 @@ mod tests {
                 .collect())
         }
 
-        fn find_by_event_type(
+        async fn find_by_event_type(
             &self,
             event_type: OperationEventType,
         ) -> Result<Vec<OperationLog>, ipo_backend_shared::errors::DomainError> {
@@ -252,8 +262,8 @@ mod tests {
         .expect("log")
     }
 
-    #[test]
-    fn uses_repository_level_filtering_before_in_memory_filtering() {
+    #[tokio::test]
+    async fn uses_repository_level_filtering_before_in_memory_filtering() {
         let repository = Arc::new(CountingRepository::new(vec![
             build_log(OperationEventType::FetchStocks, 1),
             build_log(OperationEventType::ConnectionTest, 2),
@@ -268,6 +278,7 @@ mod tests {
                 cursor: None,
                 limit: None,
             })
+            .await
             .expect("execute");
 
         assert_eq!(output.items.len(), 1);

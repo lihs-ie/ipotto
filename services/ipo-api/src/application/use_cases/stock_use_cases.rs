@@ -167,12 +167,17 @@ impl ListIpoStocksUseCase {
         Self { repository }
     }
 
-    pub fn execute(&self, input: ListIpoStocksInput) -> Result<ListIpoStocksOutput, DomainError> {
+    pub async fn execute(
+        &self,
+        input: ListIpoStocksInput,
+    ) -> Result<ListIpoStocksOutput, DomainError> {
         let stocks = match input.status_filter {
-            Some(status_filter) => self
-                .repository
-                .find_by_status(parse_stock_status(&status_filter)?)?,
-            None => self.repository.find_all()?,
+            Some(status_filter) => {
+                self.repository
+                    .find_by_status(parse_stock_status(&status_filter)?)
+                    .await?
+            }
+            None => self.repository.find_all().await?,
         };
 
         let items = stocks.iter().map(stock_to_summary).collect::<Vec<_>>();
@@ -202,39 +207,41 @@ impl GetIpoStockUseCase {
         }
     }
 
-    pub fn execute(&self, input: GetIpoStockInput) -> Result<GetIpoStockOutput, DomainError> {
+    pub async fn execute(&self, input: GetIpoStockInput) -> Result<GetIpoStockOutput, DomainError> {
         let stock_identifier = StockIdentifier::new(input.stock_identifier)?;
         let stock = self
             .stock_repository
-            .find_by_id(&stock_identifier)?
+            .find_by_id(&stock_identifier)
+            .await?
             .ok_or_else(|| DomainError::NotFound {
                 resource: "stock".to_string(),
                 identifier: stock_identifier.value().to_string(),
             })?;
 
-        let applications = self
+        let found_applications = self
             .application_repository
-            .find_by_stock(stock.identifier())?
-            .into_iter()
-            .map(|application| {
-                let securities_company = self
-                    .account_repository
-                    .find_by_id(application.securities_account())?
-                    .map(|account| account.securities_company().as_str().to_string())
-                    .unwrap_or_else(|| "Unknown".to_string());
-                Ok(StockApplicationOutput {
-                    identifier: application.identifier().value().to_string(),
-                    securities_company,
-                    applied_shares: application.applied_order().shares().value(),
-                    applied_price: application.applied_order().price().value(),
-                    applied_at: application.applied_order().ordered_at().to_rfc3339(),
-                    lottery_outcome: application
-                        .lottery_outcome()
-                        .map(|outcome| lottery_result_to_string(outcome.result())),
-                    status: application.status().as_str().to_string(),
-                })
-            })
-            .collect::<Result<Vec<_>, DomainError>>()?;
+            .find_by_stock(stock.identifier())
+            .await?;
+        let mut applications = Vec::with_capacity(found_applications.len());
+        for application in found_applications {
+            let securities_company = self
+                .account_repository
+                .find_by_id(application.securities_account())
+                .await?
+                .map(|account| account.securities_company().as_str().to_string())
+                .unwrap_or_else(|| "Unknown".to_string());
+            applications.push(StockApplicationOutput {
+                identifier: application.identifier().value().to_string(),
+                securities_company,
+                applied_shares: application.applied_order().shares().value(),
+                applied_price: application.applied_order().price().value(),
+                applied_at: application.applied_order().ordered_at().to_rfc3339(),
+                lottery_outcome: application
+                    .lottery_outcome()
+                    .map(|outcome| lottery_result_to_string(outcome.result())),
+                status: application.status().as_str().to_string(),
+            });
+        }
 
         Ok(GetIpoStockOutput {
             identifier: stock.identifier().value().to_string(),
@@ -306,8 +313,8 @@ impl GetDashboardSummaryUseCase {
         }
     }
 
-    pub fn execute(&self) -> Result<DashboardSummaryOutput, DomainError> {
-        let stocks = self.stock_repository.find_all()?;
+    pub async fn execute(&self) -> Result<DashboardSummaryOutput, DomainError> {
+        let stocks = self.stock_repository.find_all().await?;
         let mut status_counts = BTreeMap::new();
         for stock in &stocks {
             *status_counts
@@ -317,10 +324,11 @@ impl GetDashboardSummaryUseCase {
 
         let mut recent_activities = Vec::new();
         for stock in &stocks {
-            for application in self
+            let applications = self
                 .application_repository
-                .find_by_stock(stock.identifier())?
-            {
+                .find_by_stock(stock.identifier())
+                .await?;
+            for application in applications {
                 let occurred_at = application
                     .lottery_outcome()
                     .map(|outcome| outcome.confirmed_at())
@@ -335,7 +343,8 @@ impl GetDashboardSummaryUseCase {
                     .unwrap_or_else(|| "ApplicationCompleted".to_string());
                 let securities_company = self
                     .account_repository
-                    .find_by_id(application.securities_account())?
+                    .find_by_id(application.securities_account())
+                    .await?
                     .map(|account| account.securities_company().as_str().to_string())
                     .unwrap_or_else(|| "Unknown".to_string());
                 recent_activities.push((
@@ -377,7 +386,8 @@ impl GetDashboardSummaryUseCase {
 
         let accounts = self
             .account_repository
-            .find_all()?
+            .find_all()
+            .await?
             .into_iter()
             .map(|account| DashboardAccountStatusOutput {
                 securities_company: account.securities_company().as_str().to_string(),

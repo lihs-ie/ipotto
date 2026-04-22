@@ -49,12 +49,16 @@ impl RegisterExclusionUseCase {
         Self { repository }
     }
 
-    pub fn execute(
+    pub async fn execute(
         &self,
         input: RegisterExclusionInput,
     ) -> Result<RegisterExclusionOutput, DomainError> {
         let company_name = CompanyName::new(input.company_name)?;
-        if self.repository.exists_by_company_name(&company_name)? {
+        if self
+            .repository
+            .exists_by_company_name(&company_name)
+            .await?
+        {
             return Err(DomainError::DuplicateExclusion {
                 company_name: company_name.value().to_string(),
             });
@@ -64,7 +68,7 @@ impl RegisterExclusionUseCase {
             ExclusionReason::new(input.reason)?,
             Utc::now(),
         )?;
-        self.repository.save(&exclusion)?;
+        self.repository.save(&exclusion).await?;
         Ok(RegisterExclusionOutput {
             identifier: exclusion.identifier().value().to_string(),
             company_name: company_name.value().to_string(),
@@ -81,16 +85,17 @@ impl RemoveExclusionUseCase {
         Self { repository }
     }
 
-    pub fn execute(&self, identifier: &str) -> Result<(), DomainError> {
+    pub async fn execute(&self, identifier: &str) -> Result<(), DomainError> {
         let identifier = ExclusionIdentifier::new(identifier)?;
-        let exclusion =
-            self.repository
-                .find_by_id(&identifier)?
-                .ok_or_else(|| DomainError::NotFound {
-                    resource: "exclusion".to_string(),
-                    identifier: identifier.value().to_string(),
-                })?;
-        self.repository.delete(exclusion.identifier())
+        let exclusion = self
+            .repository
+            .find_by_id(&identifier)
+            .await?
+            .ok_or_else(|| DomainError::NotFound {
+                resource: "exclusion".to_string(),
+                identifier: identifier.value().to_string(),
+            })?;
+        self.repository.delete(exclusion.identifier()).await
     }
 }
 
@@ -103,8 +108,8 @@ impl ListExclusionsUseCase {
         Self { repository }
     }
 
-    pub fn execute(&self) -> Result<ListExclusionsOutput, DomainError> {
-        let mut exclusions = self.repository.find_all()?;
+    pub async fn execute(&self) -> Result<ListExclusionsOutput, DomainError> {
+        let mut exclusions = self.repository.find_all().await?;
         exclusions.sort_by_key(|exclusion| std::cmp::Reverse(exclusion.registered_at()));
         let items = exclusions
             .into_iter()

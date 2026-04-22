@@ -63,7 +63,7 @@ impl UpdateNotificationSettingUseCase {
         Self { repository }
     }
 
-    pub fn execute(
+    pub async fn execute(
         &self,
         input: UpdateNotificationSettingInput,
     ) -> Result<UpdateNotificationSettingOutput, DomainError> {
@@ -84,7 +84,7 @@ impl UpdateNotificationSettingUseCase {
             setting.disable();
         }
 
-        self.repository.save(&setting)?;
+        self.repository.save(&setting).await?;
         Ok(UpdateNotificationSettingOutput {
             identifier: setting.identifier().value().to_string(),
             enabled: setting.enabled(),
@@ -102,8 +102,8 @@ impl GetNotificationSettingUseCase {
         Self { repository }
     }
 
-    pub fn execute(&self) -> Result<GetNotificationSettingOutput, DomainError> {
-        let setting = self.repository.find_default()?;
+    pub async fn execute(&self) -> Result<GetNotificationSettingOutput, DomainError> {
+        let setting = self.repository.find_default().await?;
         Ok(GetNotificationSettingOutput {
             identifier: setting.identifier().value().to_string(),
             enabled: setting.enabled(),
@@ -133,7 +133,7 @@ impl DispatchNotificationUseCase {
         event: NotificationEvent,
         event_type: NotificationEventType,
     ) -> Result<usize, DomainError> {
-        let setting = self.repository.find_default()?;
+        let setting = self.repository.find_default().await?;
         let channels = setting.find_active_channels_for_event(event_type);
         for channel in &channels {
             self.registry

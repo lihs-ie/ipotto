@@ -18,8 +18,9 @@ impl InMemoryCredentialStore {
     }
 }
 
+#[async_trait::async_trait]
 impl CredentialStorePort for InMemoryCredentialStore {
-    fn save(&self, key: &str, value: &str) -> Result<(), DomainError> {
+    async fn save(&self, key: &str, value: &str) -> Result<(), DomainError> {
         self.secrets
             .lock()
             .map_err(|error| DomainError::SecretPayloadError {
@@ -29,7 +30,7 @@ impl CredentialStorePort for InMemoryCredentialStore {
         Ok(())
     }
 
-    fn get(&self, key: &str) -> Result<String, DomainError> {
+    async fn get(&self, key: &str) -> Result<String, DomainError> {
         self.secrets
             .lock()
             .map_err(|error| DomainError::SecretPayloadError {
@@ -42,7 +43,7 @@ impl CredentialStorePort for InMemoryCredentialStore {
             })
     }
 
-    fn delete(&self, key: &str) -> Result<(), DomainError> {
+    async fn delete(&self, key: &str) -> Result<(), DomainError> {
         self.secrets
             .lock()
             .map_err(|error| DomainError::SecretPayloadError {
@@ -52,7 +53,7 @@ impl CredentialStorePort for InMemoryCredentialStore {
         Ok(())
     }
 
-    fn exists(&self, key: &str) -> Result<bool, DomainError> {
+    async fn exists(&self, key: &str) -> Result<bool, DomainError> {
         Ok(self
             .secrets
             .lock()

@@ -130,30 +130,31 @@ impl LotteryApplication {
 }
 
 /// Repository contract for lottery applications.
-pub trait LotteryApplicationRepository {
+#[async_trait::async_trait]
+pub trait LotteryApplicationRepository: Send + Sync {
     /// Finds an application by identifier.
-    fn find_by_id(
+    async fn find_by_id(
         &self,
         identifier: &ApplicationIdentifier,
     ) -> Result<Option<LotteryApplication>, DomainError>;
 
     /// Saves an application aggregate.
-    fn save(&self, application: &LotteryApplication) -> Result<(), DomainError>;
+    async fn save(&self, application: &LotteryApplication) -> Result<(), DomainError>;
 
     /// Returns applications for a stock.
-    fn find_by_stock(
+    async fn find_by_stock(
         &self,
         stock: &StockIdentifier,
     ) -> Result<Vec<LotteryApplication>, DomainError>;
 
     /// Returns applications by status.
-    fn find_by_status(
+    async fn find_by_status(
         &self,
         status: ApplicationStatus,
     ) -> Result<Vec<LotteryApplication>, DomainError>;
 
     /// Returns whether an application exists for the stock and account combination.
-    fn exists_by_stock_and_account(
+    async fn exists_by_stock_and_account(
         &self,
         stock: &StockIdentifier,
         account: &SecuritiesAccountIdentifier,

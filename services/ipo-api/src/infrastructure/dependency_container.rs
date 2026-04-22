@@ -44,11 +44,13 @@ pub struct DependencyContainer {
 }
 
 impl DependencyContainer {
-    pub fn new() -> Result<Self, DomainError> {
+    pub async fn new() -> Result<Self, DomainError> {
         let client = ReqwestClientFactory::new(HttpClientConfig::default()).build()?;
         let credential_store = InMemoryCredentialStore::new();
         if let Some(sendgrid_api_key) = config::sendgrid_api_key() {
-            credential_store.save(sendgrid_api_key_secret_name(), &sendgrid_api_key)?;
+            credential_store
+                .save(sendgrid_api_key_secret_name(), &sendgrid_api_key)
+                .await?;
         }
 
         let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
@@ -86,10 +88,11 @@ impl DependencyContainer {
                 slack_adapter,
             )),
         )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn from_components(
+    pub async fn from_components(
         stock_repository: Arc<dyn IpoStockRepository + Send + Sync>,
         exclusion_repository: Arc<dyn ExclusionRepository + Send + Sync>,
         application_repository: Arc<dyn LotteryApplicationRepository + Send + Sync>,
@@ -102,10 +105,13 @@ impl DependencyContainer {
         if notification_setting_repository
             .find_by_id(
                 &ipo_backend_shared::domain::notification::NotificationSettingIdentifier::default_id(),
-            )?
+            )
+            .await?
             .is_none()
         {
-            notification_setting_repository.save(&NotificationSetting::create(Vec::new())?)?;
+            notification_setting_repository
+                .save(&NotificationSetting::create(Vec::new())?)
+                .await?;
         }
 
         Ok(Self {

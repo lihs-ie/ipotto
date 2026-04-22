@@ -50,11 +50,12 @@ where
     }
 }
 
+#[async_trait::async_trait]
 impl<S> SecuritiesAccountRepository for FirestoreSecuritiesAccountRepository<S>
 where
-    S: CredentialStorePort,
+    S: CredentialStorePort + 'static,
 {
-    fn find_by_id(
+    async fn find_by_id(
         &self,
         identifier: &SecuritiesAccountIdentifier,
     ) -> Result<Option<SecuritiesAccount>, DomainError> {
@@ -69,7 +70,10 @@ where
         let Some(document) = document else {
             return Ok(None);
         };
-        let payload = self.credential_store.get(&document.credential_secret_key)?;
+        let payload = self
+            .credential_store
+            .get(&document.credential_secret_key)
+            .await?;
         let payload: AccountCredentialSecretPayload =
             serde_json::from_str(&payload).map_err(|error| DomainError::SecretPayloadError {
                 reason: error.to_string(),
@@ -77,7 +81,7 @@ where
         Ok(Some(document.to_domain(payload.to_domain()?)?))
     }
 
-    fn save(&self, account: &SecuritiesAccount) -> Result<(), DomainError> {
+    async fn save(&self, account: &SecuritiesAccount) -> Result<(), DomainError> {
         let secret_key = account_credential_secret_name(account.identifier());
         let payload = serde_json::to_string(&AccountCredentialSecretPayload::from_domain(
             account.credential(),
@@ -85,7 +89,7 @@ where
         .map_err(|error| DomainError::SecretPayloadError {
             reason: error.to_string(),
         })?;
-        self.credential_store.save(&secret_key, &payload)?;
+        self.credential_store.save(&secret_key, &payload).await?;
         self.documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
@@ -98,7 +102,7 @@ where
         Ok(())
     }
 
-    fn delete(&self, identifier: &SecuritiesAccountIdentifier) -> Result<(), DomainError> {
+    async fn delete(&self, identifier: &SecuritiesAccountIdentifier) -> Result<(), DomainError> {
         let document = self
             .documents
             .lock()
@@ -109,7 +113,8 @@ where
             .cloned();
         if let Some(document) = document {
             self.credential_store
-                .delete(&document.credential_secret_key)?;
+                .delete(&document.credential_secret_key)
+                .await?;
             self.documents
                 .lock()
                 .map_err(|error| DomainError::FirestoreMappingError {
@@ -120,7 +125,7 @@ where
         Ok(())
     }
 
-    fn find_all(&self) -> Result<Vec<SecuritiesAccount>, DomainError> {
+    async fn find_all(&self) -> Result<Vec<SecuritiesAccount>, DomainError> {
         let documents: Vec<SecuritiesAccountDocument> = self
             .documents
             .lock()
@@ -131,21 +136,25 @@ where
             .cloned()
             .collect();
 
-        documents
-            .into_iter()
-            .map(|document| {
-                let payload = self.credential_store.get(&document.credential_secret_key)?;
-                let payload: AccountCredentialSecretPayload = serde_json::from_str(&payload)
-                    .map_err(|error| DomainError::SecretPayloadError {
+        let mut accounts = Vec::with_capacity(documents.len());
+        for document in documents {
+            let payload = self
+                .credential_store
+                .get(&document.credential_secret_key)
+                .await?;
+            let payload: AccountCredentialSecretPayload =
+                serde_json::from_str(&payload).map_err(|error| {
+                    DomainError::SecretPayloadError {
                         reason: error.to_string(),
-                    })?;
-                document.to_domain(payload.to_domain()?)
-            })
-            .collect()
+                    }
+                })?;
+            accounts.push(document.to_domain(payload.to_domain()?)?);
+        }
+        Ok(accounts)
     }
 
-    fn find_active(&self) -> Result<Vec<SecuritiesAccount>, DomainError> {
-        self.find_all().map(|accounts| {
+    async fn find_active(&self) -> Result<Vec<SecuritiesAccount>, DomainError> {
+        self.find_all().await.map(|accounts| {
             accounts
                 .into_iter()
                 .filter(|account| account.activation().is_active())
@@ -200,29 +209,38 @@ mod tests {
         account
     }
 
-    #[test]
-    fn saves_accounts_and_removes_secret_on_delete() {
+    #[tokio::test]
+    async fn saves_accounts_and_removes_secret_on_delete() {
         let credential_store = InMemoryCredentialStore::new();
         let repository = FirestoreSecuritiesAccountRepository::new(credential_store.clone());
         let active = build_account(true);
         let inactive = build_account(false);
 
-        repository.save(&active).expect("save active");
-        repository.save(&inactive).expect("save inactive");
+        repository.save(&active).await.expect("save active");
+        repository.save(&inactive).await.expect("save inactive");
 
-        assert_eq!(repository.find_all().expect("find all").len(), 2);
-        assert_eq!(repository.find_active().expect("find active").len(), 1);
+        assert_eq!(repository.find_all().await.expect("find all").len(), 2);
+        assert_eq!(
+            repository.find_active().await.expect("find active").len(),
+            1
+        );
         assert!(credential_store
             .exists(&account_credential_secret_name(active.identifier()))
+            .await
             .expect("secret exists"));
 
-        repository.delete(active.identifier()).expect("delete");
+        repository
+            .delete(active.identifier())
+            .await
+            .expect("delete");
         assert!(repository
             .find_by_id(active.identifier())
+            .await
             .expect("find")
             .is_none());
         assert!(!credential_store
             .exists(&account_credential_secret_name(active.identifier()))
+            .await
             .expect("secret removed"));
     }
 }

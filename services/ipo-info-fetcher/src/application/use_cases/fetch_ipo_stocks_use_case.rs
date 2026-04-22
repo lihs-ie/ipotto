@@ -56,7 +56,8 @@ impl FetchIpoStocksUseCase {
         let scraped_stocks = self.scraper.scrape().await?;
         let mut existing_stocks = self
             .stock_repository
-            .find_all()?
+            .find_all()
+            .await?
             .into_iter()
             .map(|stock| {
                 (
@@ -80,8 +81,8 @@ impl FetchIpoStocksUseCase {
                 .await
             {
                 errors.push(error.to_string());
-                self.operation_log_repository.save(&OperationLog::create(
-                    OperationLogPayload::new(
+                self.operation_log_repository
+                    .save(&OperationLog::create(OperationLogPayload::new(
                         None,
                         OperationEventType::FetchStocks,
                         "ipo-info-fetcher",
@@ -89,8 +90,8 @@ impl FetchIpoStocksUseCase {
                         format!("failed to process {}", scraped_stock.company_name()),
                         Some(error.to_string()),
                         Utc::now(),
-                    ),
-                )?)?;
+                    ))?)
+                    .await?;
             }
         }
 
@@ -113,14 +114,14 @@ impl FetchIpoStocksUseCase {
 
         if let Some(mut stock) = existing {
             stock.update_from_source(update)?;
-            self.stock_repository.save(&stock)?;
+            self.stock_repository.save(&stock).await?;
             existing_stocks.insert(
                 stock.company_profile().company_name().value().to_string(),
                 stock.clone(),
             );
             *updated_count += 1;
-            self.operation_log_repository.save(&OperationLog::create(
-                OperationLogPayload::new(
+            self.operation_log_repository
+                .save(&OperationLog::create(OperationLogPayload::new(
                     None,
                     OperationEventType::FetchStocks,
                     "ipo-info-fetcher",
@@ -128,13 +129,13 @@ impl FetchIpoStocksUseCase {
                     format!("updated {}", stock.company_profile().company_name().value()),
                     None,
                     Utc::now(),
-                ),
-            )?)?;
+                ))?)
+                .await?;
             return Ok(());
         }
 
         let stock = build_new_stock(scraped_stock)?;
-        self.stock_repository.save(&stock)?;
+        self.stock_repository.save(&stock).await?;
         existing_stocks.insert(
             stock.company_profile().company_name().value().to_string(),
             stock.clone(),
@@ -167,7 +168,8 @@ impl FetchIpoStocksUseCase {
                 format!("saved {}", stock.company_profile().company_name().value()),
                 None,
                 Utc::now(),
-            ))?)?;
+            ))?)
+            .await?;
         *fetched_count += 1;
         Ok(())
     }
@@ -298,52 +300,53 @@ mod tests {
         }
     }
 
+    #[async_trait::async_trait]
     impl IpoStockRepository for CountingStockRepository {
-        fn find_by_id(
+        async fn find_by_id(
             &self,
             identifier: &ipo_backend_shared::domain::stock::StockIdentifier,
         ) -> Result<
             Option<ipo_backend_shared::domain::stock::IpoStock>,
             ipo_backend_shared::errors::DomainError,
         > {
-            self.inner.find_by_id(identifier)
+            self.inner.find_by_id(identifier).await
         }
 
-        fn save(
+        async fn save(
             &self,
             stock: &ipo_backend_shared::domain::stock::IpoStock,
         ) -> Result<(), ipo_backend_shared::errors::DomainError> {
-            self.inner.save(stock)
+            self.inner.save(stock).await
         }
 
-        fn find_all(
+        async fn find_all(
             &self,
         ) -> Result<
             Vec<ipo_backend_shared::domain::stock::IpoStock>,
             ipo_backend_shared::errors::DomainError,
         > {
             self.find_all_calls.fetch_add(1, Ordering::SeqCst);
-            self.inner.find_all()
+            self.inner.find_all().await
         }
 
-        fn find_by_status(
+        async fn find_by_status(
             &self,
             status: ipo_backend_shared::domain::stock::StockStatus,
         ) -> Result<
             Vec<ipo_backend_shared::domain::stock::IpoStock>,
             ipo_backend_shared::errors::DomainError,
         > {
-            self.inner.find_by_status(status)
+            self.inner.find_by_status(status).await
         }
 
-        fn find_in_book_building_period(
+        async fn find_in_book_building_period(
             &self,
             date: NaiveDate,
         ) -> Result<
             Vec<ipo_backend_shared::domain::stock::IpoStock>,
             ipo_backend_shared::errors::DomainError,
         > {
-            self.inner.find_in_book_building_period(date)
+            self.inner.find_in_book_building_period(date).await
         }
     }
 
@@ -378,7 +381,10 @@ mod tests {
 
         assert_eq!(output.fetched_count, 1);
         assert_eq!(output.updated_count, 0);
-        assert_eq!(stock_repository.find_all().expect("find all").len(), 1);
+        assert_eq!(
+            stock_repository.find_all().await.expect("find all").len(),
+            1
+        );
         assert_eq!(
             event_publisher
                 .published_messages()

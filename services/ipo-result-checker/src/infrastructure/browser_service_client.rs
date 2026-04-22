@@ -7,6 +7,7 @@ use ipo_backend_shared::{
         stock::IpoStock,
     },
     errors::DomainError,
+    infrastructure::http_client::{post_json_with_retry, RetryPolicy},
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -15,13 +16,23 @@ use serde::{Deserialize, Serialize};
 pub struct BrowserServiceClient {
     client: Client,
     base_url: String,
+    retry_policy: RetryPolicy,
 }
 
 impl BrowserServiceClient {
     pub fn new(client: Client, base_url: impl Into<String>) -> Self {
+        Self::with_retry_policy(client, base_url, RetryPolicy::default())
+    }
+
+    pub fn with_retry_policy(
+        client: Client,
+        base_url: impl Into<String>,
+        retry_policy: RetryPolicy,
+    ) -> Self {
         Self {
             client,
             base_url: base_url.into(),
+            retry_policy,
         }
     }
 }
@@ -48,24 +59,10 @@ impl BrokerBrowserPort for BrowserServiceClient {
         credential: &AccountCredential,
         stock: &IpoStock,
     ) -> Result<Option<LotteryResult>, DomainError> {
-        let response = self
-            .client
-            .post(format!("{}/internal/lottery-results/check", self.base_url))
-            .json(&BrowserLotteryResultRequest::new(credential, stock))
-            .send()
-            .await
-            .map_err(|error| DomainError::HttpClientError {
-                reason: error.to_string(),
-            })?
-            .error_for_status()
-            .map_err(|error| DomainError::HttpClientError {
-                reason: error.to_string(),
-            })?
-            .json::<BrowserLotteryResultResponse>()
-            .await
-            .map_err(|error| DomainError::HttpClientError {
-                reason: error.to_string(),
-            })?;
+        let url = format!("{}/internal/lottery-results/check", self.base_url);
+        let request = BrowserLotteryResultRequest::new(credential, stock);
+        let response: BrowserLotteryResultResponse =
+            post_json_with_retry(&self.retry_policy, &self.client, &url, &request).await?;
         response.result.map(parse_lottery_result).transpose()
     }
 }

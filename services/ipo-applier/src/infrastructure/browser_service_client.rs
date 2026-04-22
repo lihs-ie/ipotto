@@ -10,6 +10,7 @@ use ipo_backend_shared::{
         stock::IpoStock,
     },
     errors::DomainError,
+    infrastructure::http_client::{post_json_with_retry, RetryPolicy},
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -24,13 +25,23 @@ use serde::{Deserialize, Serialize};
 pub struct BrowserServiceClient {
     client: Client,
     base_url: String,
+    retry_policy: RetryPolicy,
 }
 
 impl BrowserServiceClient {
     pub fn new(client: Client, base_url: impl Into<String>) -> Self {
+        Self::with_retry_policy(client, base_url, RetryPolicy::default())
+    }
+
+    pub fn with_retry_policy(
+        client: Client,
+        base_url: impl Into<String>,
+        retry_policy: RetryPolicy,
+    ) -> Self {
         Self {
             client,
             base_url: base_url.into(),
+            retry_policy,
         }
     }
 }
@@ -68,26 +79,15 @@ impl BrokerBrowserPort for BrowserServiceClient {
         stock: &IpoStock,
         applied_order: &AppliedOrder,
     ) -> Result<ApplicationResult, DomainError> {
-        self.client
-            .post(format!(
-                "{}/internal/lottery-applications/submit",
-                self.base_url
-            ))
-            .json(&BrowserApplyRequest::new(credential, stock, applied_order))
-            .send()
-            .await
-            .map_err(|error| DomainError::HttpClientError {
-                reason: error.to_string(),
-            })?
-            .error_for_status()
-            .map_err(|error| DomainError::HttpClientError {
-                reason: error.to_string(),
-            })?
-            .json::<ApplicationResult>()
-            .await
-            .map_err(|error| DomainError::HttpClientError {
-                reason: error.to_string(),
-            })
+        let url = format!("{}/internal/lottery-applications/submit", self.base_url);
+        let request = BrowserApplyRequest::new(credential, stock, applied_order);
+        post_json_with_retry::<_, ApplicationResult>(
+            &self.retry_policy,
+            &self.client,
+            &url,
+            &request,
+        )
+        .await
     }
 }
 

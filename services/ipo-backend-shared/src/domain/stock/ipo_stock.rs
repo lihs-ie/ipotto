@@ -163,21 +163,28 @@ impl IpoStock {
 }
 
 /// Repository contract for the stock aggregate.
-pub trait IpoStockRepository {
+#[async_trait::async_trait]
+pub trait IpoStockRepository: Send + Sync {
     /// Finds a stock by identifier.
-    fn find_by_id(&self, identifier: &StockIdentifier) -> Result<Option<IpoStock>, DomainError>;
+    async fn find_by_id(
+        &self,
+        identifier: &StockIdentifier,
+    ) -> Result<Option<IpoStock>, DomainError>;
 
     /// Saves a stock aggregate.
-    fn save(&self, stock: &IpoStock) -> Result<(), DomainError>;
+    async fn save(&self, stock: &IpoStock) -> Result<(), DomainError>;
 
     /// Returns all stocks.
-    fn find_all(&self) -> Result<Vec<IpoStock>, DomainError>;
+    async fn find_all(&self) -> Result<Vec<IpoStock>, DomainError>;
 
     /// Returns stocks by status.
-    fn find_by_status(&self, status: StockStatus) -> Result<Vec<IpoStock>, DomainError>;
+    async fn find_by_status(&self, status: StockStatus) -> Result<Vec<IpoStock>, DomainError>;
 
     /// Returns stocks in the book building period on the given date.
-    fn find_in_book_building_period(&self, date: NaiveDate) -> Result<Vec<IpoStock>, DomainError>;
+    async fn find_in_book_building_period(
+        &self,
+        date: NaiveDate,
+    ) -> Result<Vec<IpoStock>, DomainError>;
 }
 
 #[cfg(test)]

@@ -64,18 +64,24 @@ impl CheckLotteryResultUseCase {
     pub async fn execute(&self) -> Result<CheckLotteryResultOutput, DomainError> {
         let applications = self
             .application_repository
-            .find_by_status(ApplicationStatus::Applied)?;
+            .find_by_status(ApplicationStatus::Applied)
+            .await?;
         let mut checked_count = 0_u32;
         let mut results = Vec::new();
 
         for mut application in applications {
-            let stock = match self.stock_repository.find_by_id(application.stock())? {
+            let stock = match self
+                .stock_repository
+                .find_by_id(application.stock())
+                .await?
+            {
                 Some(stock) => stock,
                 None => continue,
             };
             let account = match self
                 .account_repository
-                .find_by_id(application.securities_account())?
+                .find_by_id(application.securities_account())
+                .await?
             {
                 Some(account) => account,
                 None => continue,
@@ -88,7 +94,7 @@ impl CheckLotteryResultUseCase {
             {
                 Ok(Some(result)) => {
                     application.record_outcome(result, Utc::now())?;
-                    self.application_repository.save(&application)?;
+                    self.application_repository.save(&application).await?;
                     let publish_result = self
                         .event_publisher
                         .publish(
@@ -112,8 +118,8 @@ impl CheckLotteryResultUseCase {
 
                     match publish_result {
                         Ok(()) => {
-                            self.operation_log_repository.save(&OperationLog::create(
-                                OperationLogPayload::new(
+                            self.operation_log_repository
+                                .save(&OperationLog::create(OperationLogPayload::new(
                                     Some(application.identifier().clone()),
                                     OperationEventType::CheckLotteryResult,
                                     "ipo-result-checker",
@@ -121,12 +127,12 @@ impl CheckLotteryResultUseCase {
                                     format!("checked {}", stock.identifier().value()),
                                     None,
                                     Utc::now(),
-                                ),
-                            )?)?;
+                                ))?)
+                                .await?;
                         }
                         Err(error) => {
-                            self.operation_log_repository.save(&OperationLog::create(
-                                OperationLogPayload::new(
+                            self.operation_log_repository
+                                .save(&OperationLog::create(OperationLogPayload::new(
                                     Some(application.identifier().clone()),
                                     OperationEventType::CheckLotteryResult,
                                     "ipo-result-checker",
@@ -137,8 +143,8 @@ impl CheckLotteryResultUseCase {
                                     ),
                                     Some(error.to_string()),
                                     Utc::now(),
-                                ),
-                            )?)?;
+                                ))?)
+                                .await?;
                         }
                     }
 
@@ -159,8 +165,8 @@ impl CheckLotteryResultUseCase {
                     });
                 }
                 Err(error) => {
-                    self.operation_log_repository.save(&OperationLog::create(
-                        OperationLogPayload::new(
+                    self.operation_log_repository
+                        .save(&OperationLog::create(OperationLogPayload::new(
                             Some(application.identifier().clone()),
                             OperationEventType::CheckLotteryResult,
                             "ipo-result-checker",
@@ -168,8 +174,8 @@ impl CheckLotteryResultUseCase {
                             format!("failed to check {}", stock.identifier().value()),
                             Some(error.to_string()),
                             Utc::now(),
-                        ),
-                    )?)?;
+                        ))?)
+                        .await?;
                 }
             }
         }
@@ -349,10 +355,14 @@ mod tests {
         .expect("application");
         application.apply().expect("apply");
 
-        account_repository.save(&account).expect("save account");
-        stock_repository.save(&stock).expect("save stock");
+        account_repository
+            .save(&account)
+            .await
+            .expect("save account");
+        stock_repository.save(&stock).await.expect("save stock");
         application_repository
             .save(&application)
+            .await
             .expect("save application");
 
         let output = CheckLotteryResultUseCase::new(
@@ -371,6 +381,7 @@ mod tests {
         assert_eq!(
             application_repository
                 .find_by_id(application.identifier())
+                .await
                 .expect("find application")
                 .expect("application")
                 .status(),
@@ -422,10 +433,14 @@ mod tests {
         .expect("application");
         application.apply().expect("apply");
 
-        account_repository.save(&account).expect("save account");
-        stock_repository.save(&stock).expect("save stock");
+        account_repository
+            .save(&account)
+            .await
+            .expect("save account");
+        stock_repository.save(&stock).await.expect("save stock");
         application_repository
             .save(&application)
+            .await
             .expect("save application");
 
         let output = CheckLotteryResultUseCase::new(
@@ -444,13 +459,14 @@ mod tests {
         assert_eq!(
             application_repository
                 .find_by_id(application.identifier())
+                .await
                 .expect("find application")
                 .expect("application")
                 .status(),
             ApplicationStatus::ResultChecked
         );
 
-        let logs = operation_log_repository.find_all().expect("logs");
+        let logs = operation_log_repository.find_all().await.expect("logs");
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].status(), OperationStatus::Failed);
         assert_eq!(

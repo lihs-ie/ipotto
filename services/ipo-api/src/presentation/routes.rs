@@ -281,10 +281,11 @@ mod tests {
 
     #[tokio::test]
     async fn lists_seeded_stock() {
-        let container = DependencyContainer::new().expect("container");
+        let container = DependencyContainer::new().await.expect("container");
         container
             .stock_repository()
             .save(&build_stock())
+            .await
             .expect("save stock");
         let app = create_router(container, None, None);
 
@@ -309,7 +310,11 @@ mod tests {
 
     #[tokio::test]
     async fn registers_exclusion_via_http() {
-        let app = create_router(DependencyContainer::new().expect("container"), None, None);
+        let app = create_router(
+            DependencyContainer::new().await.expect("container"),
+            None,
+            None,
+        );
 
         let response = app
             .oneshot(
@@ -360,6 +365,7 @@ mod tests {
         setting.enable().expect("enable");
         notification_setting_repository
             .save(&setting)
+            .await
             .expect("save setting");
 
         let line_port = Arc::new(CaptureNotificationPort::default());
@@ -380,6 +386,7 @@ mod tests {
                     slack_port,
                 )),
             )
+            .await
             .expect("container"),
             None,
             None,
@@ -451,6 +458,7 @@ mod tests {
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .await
             .expect("save api key");
         let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
             credential_store.clone(),
@@ -475,6 +483,7 @@ mod tests {
         setting.enable().expect("enable");
         notification_setting_repository
             .save(&setting)
+            .await
             .expect("save setting");
 
         let app = create_router(
@@ -497,6 +506,7 @@ mod tests {
                     Arc::new(CaptureNotificationPort::default()),
                 )),
             )
+            .await
             .expect("container"),
             None,
             None,
@@ -554,6 +564,7 @@ mod tests {
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .await
             .expect("save api key");
         let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
             credential_store.clone(),
@@ -578,6 +589,7 @@ mod tests {
         setting.enable().expect("enable");
         notification_setting_repository
             .save(&setting)
+            .await
             .expect("save setting");
 
         let app = create_router(
@@ -600,6 +612,7 @@ mod tests {
                     Arc::new(CaptureNotificationPort::default()),
                 )),
             )
+            .await
             .expect("container"),
             None,
             None,
@@ -674,6 +687,7 @@ mod tests {
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .await
             .expect("save api key");
         let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
             credential_store.clone(),
@@ -698,6 +712,7 @@ mod tests {
         setting.enable().expect("enable");
         notification_setting_repository
             .save(&setting)
+            .await
             .expect("save setting");
 
         let app = create_router(
@@ -720,6 +735,7 @@ mod tests {
                     Arc::new(CaptureNotificationPort::default()),
                 )),
             )
+            .await
             .expect("container"),
             None,
             None,
@@ -776,6 +792,7 @@ mod tests {
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .await
             .expect("save api key");
         let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
             credential_store.clone(),
@@ -800,6 +817,7 @@ mod tests {
         setting.enable().expect("enable");
         notification_setting_repository
             .save(&setting)
+            .await
             .expect("save setting");
 
         let app = create_router(
@@ -822,6 +840,7 @@ mod tests {
                     Arc::new(CaptureNotificationPort::default()),
                 )),
             )
+            .await
             .expect("container"),
             None,
             None,
@@ -875,6 +894,7 @@ mod tests {
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .await
             .expect("save api key");
         let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
             credential_store.clone(),
@@ -899,6 +919,7 @@ mod tests {
         setting.enable().expect("enable");
         notification_setting_repository
             .save(&setting)
+            .await
             .expect("save setting");
 
         let app = create_router(
@@ -921,6 +942,7 @@ mod tests {
                     Arc::new(CaptureNotificationPort::default()),
                 )),
             )
+            .await
             .expect("container"),
             None,
             None,
@@ -994,6 +1016,7 @@ mod tests {
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .await
             .expect("save api key");
         let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
             credential_store.clone(),
@@ -1018,6 +1041,7 @@ mod tests {
         setting.enable().expect("enable");
         notification_setting_repository
             .save(&setting)
+            .await
             .expect("save setting");
 
         let app = create_router(
@@ -1040,6 +1064,7 @@ mod tests {
                     Arc::new(CaptureNotificationPort::default()),
                 )),
             )
+            .await
             .expect("container"),
             None,
             None,
@@ -1102,7 +1127,10 @@ mod tests {
 
         let account = build_account();
         let account_id = account.identifier().value().to_string();
-        account_repository.save(&account).expect("save account");
+        account_repository
+            .save(&account)
+            .await
+            .expect("save account");
 
         let app = create_router(
             DependencyContainer::from_components(
@@ -1119,6 +1147,7 @@ mod tests {
                     Arc::new(CaptureNotificationPort::default()),
                 )),
             )
+            .await
             .expect("container"),
             None,
             None,
@@ -1145,6 +1174,7 @@ mod tests {
 
         let stored = account_repository
             .find_by_id(&SecuritiesAccountIdentifier::new(account_id).expect("account identifier"))
+            .await
             .expect("find account")
             .expect("stored account");
         assert!(stored.connection_test().is_some());
@@ -1184,7 +1214,10 @@ mod tests {
 
         let account = build_account();
         let account_id = account.identifier().value().to_string();
-        account_repository.save(&account).expect("save account");
+        account_repository
+            .save(&account)
+            .await
+            .expect("save account");
 
         let app = create_router(
             DependencyContainer::from_components(
@@ -1204,6 +1237,7 @@ mod tests {
                     Arc::new(CaptureNotificationPort::default()),
                 )),
             )
+            .await
             .expect("container"),
             None,
             None,
@@ -1230,6 +1264,7 @@ mod tests {
 
         let stored = account_repository
             .find_by_id(&SecuritiesAccountIdentifier::new(account_id).expect("account identifier"))
+            .await
             .expect("find account")
             .expect("stored account");
         assert_eq!(

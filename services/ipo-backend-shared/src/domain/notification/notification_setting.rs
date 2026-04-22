@@ -144,18 +144,19 @@ impl NotificationSetting {
 }
 
 /// Repository contract for notification settings.
-pub trait NotificationSettingRepository {
+#[async_trait::async_trait]
+pub trait NotificationSettingRepository: Send + Sync {
     /// Finds a notification setting by identifier.
-    fn find_by_id(
+    async fn find_by_id(
         &self,
         identifier: &NotificationSettingIdentifier,
     ) -> Result<Option<NotificationSetting>, DomainError>;
 
     /// Saves a notification setting aggregate.
-    fn save(&self, setting: &NotificationSetting) -> Result<(), DomainError>;
+    async fn save(&self, setting: &NotificationSetting) -> Result<(), DomainError>;
 
     /// Returns the default notification setting aggregate.
-    fn find_default(&self) -> Result<NotificationSetting, DomainError>;
+    async fn find_default(&self) -> Result<NotificationSetting, DomainError>;
 }
 
 #[cfg(test)]

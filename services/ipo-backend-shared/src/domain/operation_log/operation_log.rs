@@ -132,22 +132,23 @@ impl OperationLog {
 }
 
 /// Repository contract for operation logs.
-pub trait OperationLogRepository {
+#[async_trait::async_trait]
+pub trait OperationLogRepository: Send + Sync {
     /// Saves an operation log entry.
-    fn save(&self, log: &OperationLog) -> Result<(), DomainError>;
+    async fn save(&self, log: &OperationLog) -> Result<(), DomainError>;
 
     /// Returns all operation log entries.
-    fn find_all(&self) -> Result<Vec<OperationLog>, DomainError>;
+    async fn find_all(&self) -> Result<Vec<OperationLog>, DomainError>;
 
     /// Returns entries executed in the provided date range.
-    fn find_by_date_range(
+    async fn find_by_date_range(
         &self,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<OperationLog>, DomainError>;
 
     /// Returns entries filtered by event type.
-    fn find_by_event_type(
+    async fn find_by_event_type(
         &self,
         event_type: OperationEventType,
     ) -> Result<Vec<OperationLog>, DomainError>;

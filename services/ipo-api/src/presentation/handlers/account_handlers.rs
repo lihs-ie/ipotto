@@ -20,7 +20,9 @@ pub async fn list_accounts(
     State(container): State<DependencyContainer>,
 ) -> Result<Json<ListSecuritiesAccountsOutput>, ApiError> {
     Ok(Json(
-        ListSecuritiesAccountsUseCase::new(container.account_repository()).execute()?,
+        ListSecuritiesAccountsUseCase::new(container.account_repository())
+            .execute()
+            .await?,
     ))
 }
 
@@ -28,8 +30,9 @@ pub async fn register_account(
     State(container): State<DependencyContainer>,
     Json(input): Json<RegisterSecuritiesAccountInput>,
 ) -> Result<(StatusCode, Json<RegisterSecuritiesAccountOutput>), ApiError> {
-    let output =
-        RegisterSecuritiesAccountUseCase::new(container.account_repository()).execute(input)?;
+    let output = RegisterSecuritiesAccountUseCase::new(container.account_repository())
+        .execute(input)
+        .await?;
     Ok((StatusCode::CREATED, Json(output)))
 }
 
@@ -39,8 +42,9 @@ pub async fn update_account(
     Json(mut input): Json<UpdateSecuritiesAccountInput>,
 ) -> Result<Json<UpdateSecuritiesAccountOutput>, ApiError> {
     input.account_identifier = account_id;
-    let output =
-        UpdateSecuritiesAccountUseCase::new(container.account_repository()).execute(input)?;
+    let output = UpdateSecuritiesAccountUseCase::new(container.account_repository())
+        .execute(input)
+        .await?;
     Ok(Json(output))
 }
 
@@ -48,7 +52,9 @@ pub async fn delete_account(
     State(container): State<DependencyContainer>,
     Path(account_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
-    DeleteSecuritiesAccountUseCase::new(container.account_repository()).execute(&account_id)?;
+    DeleteSecuritiesAccountUseCase::new(container.account_repository())
+        .execute(&account_id)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
