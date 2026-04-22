@@ -7,6 +7,7 @@ use ipo_backend_shared::{
         stock::IpoStock,
     },
     errors::DomainError,
+    infrastructure::http_client::{get_json_with_retry, RetryPolicy},
 };
 use reqwest::Client;
 
@@ -14,13 +15,23 @@ use reqwest::Client;
 pub struct BrowserServiceClient {
     client: Client,
     base_url: String,
+    retry_policy: RetryPolicy,
 }
 
 impl BrowserServiceClient {
     pub fn new(client: Client, base_url: impl Into<String>) -> Self {
+        Self::with_retry_policy(client, base_url, RetryPolicy::default())
+    }
+
+    pub fn with_retry_policy(
+        client: Client,
+        base_url: impl Into<String>,
+        retry_policy: RetryPolicy,
+    ) -> Self {
         Self {
             client,
             base_url: base_url.into(),
+            retry_policy,
         }
     }
 }
@@ -28,22 +39,8 @@ impl BrowserServiceClient {
 #[async_trait]
 impl BrokerBrowserPort for BrowserServiceClient {
     async fn fetch_ipo_stocks(&self) -> Result<Vec<ScrapedStock>, DomainError> {
-        self.client
-            .get(format!("{}/internal/stocks", self.base_url))
-            .send()
-            .await
-            .map_err(|error| DomainError::HttpClientError {
-                reason: error.to_string(),
-            })?
-            .error_for_status()
-            .map_err(|error| DomainError::HttpClientError {
-                reason: error.to_string(),
-            })?
-            .json::<Vec<ScrapedStock>>()
-            .await
-            .map_err(|error| DomainError::HttpClientError {
-                reason: error.to_string(),
-            })
+        let url = format!("{}/internal/stocks", self.base_url);
+        get_json_with_retry::<Vec<ScrapedStock>>(&self.retry_policy, &self.client, &url).await
     }
 
     async fn test_connection(
