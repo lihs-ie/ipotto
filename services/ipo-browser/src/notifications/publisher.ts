@@ -10,6 +10,8 @@
 // ipo-api. Re-delivery semantics are the responsibility of the
 // dispatcher on the ipo-api side.
 
+import { logger } from "../logger.js";
+
 const DEFAULT_IPO_API_BASE_URL = "http://ipo-api:8080";
 const DEFAULT_PUBLISH_PATH = "/internal/pubsub/ipo-notification";
 
@@ -60,15 +62,16 @@ export function createNotificationPublisher(
           body: JSON.stringify(body),
         });
         if (!response.ok) {
-          console.error(
-            `OperationErrorOccurred publish returned non-2xx status=${response.status}`,
-          );
+          logger.error({
+            event: "notifications.publisher.non_2xx",
+            status: response.status,
+          });
         }
       } catch (error) {
-        console.error(
-          "OperationErrorOccurred publish failed",
-          error,
-        );
+        logger.error({
+          event: "notifications.publisher.publish_failed",
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     },
   };

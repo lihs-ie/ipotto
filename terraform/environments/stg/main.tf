@@ -86,6 +86,19 @@ module "firestore" {
   depends_on = [google_project_service.enabled]
 }
 
+module "observability" {
+  source = "../../modules/observability"
+
+  project_id              = var.project_id
+  alert_email_recipients  = var.observability.alert_email_recipients
+  cloud_run_service_names = [for key, service in var.cloud_run_services : service.service_name]
+  error_rate_threshold    = var.observability.error_rate_threshold
+  restart_threshold       = var.observability.restart_threshold
+  labels                  = local.common_labels
+
+  depends_on = [google_project_service.enabled]
+}
+
 module "cloud_run" {
   for_each = var.cloud_run_services
   source   = "../../modules/cloud-run"

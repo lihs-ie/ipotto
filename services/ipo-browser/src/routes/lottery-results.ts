@@ -6,6 +6,7 @@ import {
   type CheckResultOutcome,
 } from "../flows/check-result.js";
 import { runImageAuthentication } from "../flows/image-auth/flow.js";
+import { logger } from "../logger.js";
 import {
   rakutenLogin,
   type TwoFactorHandler,
@@ -118,10 +119,11 @@ export function lotteryResultsRouter(
         }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        console.error(
-          `lottery result check error (loginId=${validated.credential.loginId})`,
-          error,
-        );
+        logger.error({
+          event: "routes.lottery_results.check_failed",
+          loginId: validated.credential.loginId,
+          error: reason,
+        });
         await publisher.publishOperationError({
           serviceName: "ipo-browser",
           operationType: "check_lottery_result",

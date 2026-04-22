@@ -8,6 +8,7 @@ import {
   loadSelectors,
   type SelectorDefinition,
 } from "../../config/selectors.js";
+import { logger } from "../../logger.js";
 
 import {
   chooseImageIndices,
@@ -157,7 +158,10 @@ export async function runImageAuthentication(
     return { status: "success" };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    console.error("image authentication flow threw", error);
+    logger.error({
+      event: "flows.image_auth.exception",
+      error: error instanceof Error ? error.message : String(error),
+    });
     const screenshotPath = await tryScreenshot(page, "image-auth-exception");
     return { status: "failure", reason, screenshotPath };
   }

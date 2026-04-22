@@ -8,6 +8,7 @@ import {
   loadSelectors,
   type SelectorDefinition,
 } from "../config/selectors.js";
+import { logger } from "../logger.js";
 
 import {
   translateLotteryResultText,
@@ -87,7 +88,10 @@ export async function rakutenCheckResult(
     return { status: "resolved", result: translated };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    console.error("rakutenCheckResult threw", error);
+    logger.error({
+      event: "flows.check_result.exception",
+      error: error instanceof Error ? error.message : String(error),
+    });
     const screenshotPath = await tryScreenshot(page, "check-result-exception");
     return { status: "failure", reason, screenshotPath };
   }

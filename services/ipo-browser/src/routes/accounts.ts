@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 
 import type { BrowserManager } from "../browser/manager.js";
 import { runImageAuthentication } from "../flows/image-auth/flow.js";
+import { logger } from "../logger.js";
 import {
   rakutenLogin,
   type TwoFactorHandler,
@@ -99,10 +100,11 @@ export function accountsRouter(
         }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        console.error(
-          `browser automation error (loginId=${validated.loginId})`,
-          error,
-        );
+        logger.error({
+          event: "routes.accounts.automation_failed",
+          loginId: validated.loginId,
+          error: reason,
+        });
         response.status(502).json({
           success: false,
           message: `browser automation error: ${reason}`,

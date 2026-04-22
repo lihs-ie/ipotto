@@ -1,18 +1,19 @@
+import { logger } from "./logger.js";
 import { createApp } from "./server.js";
 
 const port = parseInt(process.env["PORT"] ?? "8081", 10);
 
 const { app, browserManager } = createApp();
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`ipo-browser listening on port ${port}`);
+  logger.info({ event: "server.listening", port });
 });
 
 const shutdown = async (signal: string): Promise<void> => {
-  console.log(`received ${signal}, closing browser contexts and HTTP server`);
+  logger.info({ event: "server.shutdown.start", signal });
   try {
     await browserManager.closeAll();
   } catch (error) {
-    console.error("browser shutdown failed", error);
+    logger.error({ event: "server.shutdown.browser_failed", error });
   }
   server.close(() => {
     process.exit(0);

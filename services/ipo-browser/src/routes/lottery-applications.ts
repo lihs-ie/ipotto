@@ -3,6 +3,7 @@ import { Router, type Request, type Response } from "express";
 import type { BrowserManager } from "../browser/manager.js";
 import { rakutenApply, type ApplyResult } from "../flows/apply.js";
 import { runImageAuthentication } from "../flows/image-auth/flow.js";
+import { logger } from "../logger.js";
 import {
   rakutenLogin,
   type TwoFactorHandler,
@@ -139,10 +140,11 @@ export function lotteryApplicationsRouter(
         }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        console.error(
-          `lottery application submit error (loginId=${validated.credential.loginId})`,
-          error,
-        );
+        logger.error({
+          event: "routes.lottery_applications.submit_failed",
+          loginId: validated.credential.loginId,
+          error: reason,
+        });
         await publisher.publishOperationError({
           serviceName: "ipo-browser",
           operationType: "application_submit",
