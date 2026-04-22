@@ -12,6 +12,13 @@ jobs:
     defaults:
       run:
         working-directory: services
+    env:
+      # Integration tests under ipo-backend-shared/tests/ connect to the
+      # Firebase emulator container started below so cargo test drives the
+      # real gRPC `firestore` crate against a live datastore. Without this
+      # env var the tests become no-ops.
+      FIRESTORE_EMULATOR_HOST: localhost:8088
+      FIREBASE_PROJECT_ID: ipotto-local
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -20,6 +27,21 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: services
+      - name: Start Firebase emulator (Firestore gRPC on :8088)
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker compose up -d --build firebase-emulator
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:4000/ > /dev/null 2>&1; then
+              echo "Firebase emulator ready"
+              exit 0
+            fi
+            echo "Waiting for Firebase emulator... ($i/60)"
+            sleep 2
+          done
+          echo "Firebase emulator failed to start"
+          docker compose logs firebase-emulator
+          exit 1
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -32,6 +54,14 @@ jobs:
         run: cargo llvm-cov --all --lcov --output-path lcov.info
       - name: Enforce ipo-backend-shared coverage threshold (Phase 0 Task 0.1)
         run: cargo llvm-cov -p ipo-backend-shared --fail-under-lines 80 --summary-only
+      - name: Show Firebase emulator logs on failure
+        if: failure()
+        working-directory: ${{ github.workspace }}
+        run: docker compose logs firebase-emulator
+      - name: Stop Firebase emulator
+        if: success() || failure()
+        working-directory: ${{ github.workspace }}
+        run: docker compose stop firebase-emulator
 
   rust-integration-tests:
     name: Rust Integration Tests

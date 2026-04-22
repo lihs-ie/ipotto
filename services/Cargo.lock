@@ -1189,6 +1189,8 @@ dependencies = [
  "base64",
  "chrono",
  "firestore",
+ "futures",
+ "gcloud-sdk",
  "rand 0.8.6",
  "regex",
  "reqwest",
