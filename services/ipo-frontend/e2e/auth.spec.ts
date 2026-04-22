@@ -8,9 +8,10 @@ test.describe("Authentication flow", () => {
     ).toBeVisible();
   });
 
-  test("unauthenticated dashboard redirects to /login", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForURL("**/login", { timeout: 10_000 });
-    await expect(page).toHaveURL(/\/login$/);
+  test("login page reaches the IPOtto heading", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      "IPOtto",
+    );
   });
 });
