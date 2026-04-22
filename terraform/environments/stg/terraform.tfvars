@@ -16,6 +16,17 @@ service_accounts = {
       "roles/secretmanager.secretAccessor",
     ]
   }
+  applier = {
+    account_id   = "ipo-applier"
+    display_name = "IPOtto Applier STG"
+    project_roles = [
+      "roles/datastore.user",
+      "roles/logging.logWriter",
+      "roles/monitoring.metricWriter",
+      "roles/pubsub.publisher",
+      "roles/secretmanager.secretAccessor",
+    ]
+  }
 }
 
 cloud_run_services = {
@@ -30,6 +41,21 @@ cloud_run_services = {
     max_instance_count      = 1
     timeout_seconds         = 300
     max_concurrent_requests = 80
+    ingress                 = "internal"
+    environment_variables = {
+      RUST_LOG = "info"
+    }
+  }
+  applier = {
+    service_name            = "ipo-applier"
+    service_account_key     = "applier"
+    container_port          = 8084
+    cpu                     = "1"
+    memory                  = "256Mi"
+    min_instance_count      = 0
+    max_instance_count      = 1
+    timeout_seconds         = 600
+    max_concurrent_requests = 1
     ingress                 = "internal"
     environment_variables = {
       RUST_LOG = "info"
