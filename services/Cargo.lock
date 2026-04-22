@@ -948,6 +948,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ipo-applier"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "ipo-backend-shared",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "wiremock",
+]
+
+[[package]]
 name = "ipo-backend-shared"
 version = "0.1.0"
 dependencies = [

@@ -14,16 +14,16 @@ RUN mkdir -p ipo-backend-shared/src && echo "" > ipo-backend-shared/src/lib.rs \
     && mkdir -p ipo-info-fetcher/src && echo "fn main() {}" > ipo-info-fetcher/src/main.rs \
     && mkdir -p ipo-result-checker/src && echo "fn main() {}" > ipo-result-checker/src/main.rs \
     && mkdir -p ipo-applier/src && echo "fn main() {}" > ipo-applier/src/main.rs
-RUN cargo build --release --package ipo-result-checker
+RUN cargo build --release --package ipo-applier
 
 COPY ipo-backend-shared/src ipo-backend-shared/src
-COPY ipo-result-checker/src ipo-result-checker/src
-RUN touch ipo-backend-shared/src/lib.rs ipo-result-checker/src/main.rs \
-    && cargo build --release --package ipo-result-checker
+COPY ipo-applier/src ipo-applier/src
+RUN touch ipo-backend-shared/src/lib.rs ipo-applier/src/main.rs \
+    && cargo build --release --package ipo-applier
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/ipo-result-checker /usr/local/bin/
-ENV PORT=8083
-EXPOSE 8083
-CMD ["ipo-result-checker"]
+COPY --from=builder /app/target/release/ipo-applier /usr/local/bin/
+ENV PORT=8084
+EXPOSE 8084
+CMD ["ipo-applier"]
