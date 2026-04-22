@@ -6,4 +6,5 @@ pub mod http;
 pub mod infrastructure;
 pub mod logging;
 pub mod services;
+#[cfg(any(test, feature = "test-support"))]
 pub mod testing;

@@ -5,7 +5,10 @@ use ipo_backend_shared::{
     domain::{operation_log::OperationLogRepository, stock::IpoStockRepository},
     errors::DomainError,
     infrastructure::{
-        firestore::repositories::{FirestoreIpoStockRepository, FirestoreOperationLogRepository},
+        firestore::{
+            build_firestore_client,
+            repositories::{FirestoreIpoStockRepository, FirestoreOperationLogRepository},
+        },
         http_client::{HttpClientConfig, ReqwestClientFactory},
         messaging::PubSubEventPublisher,
         scraping::{
@@ -25,7 +28,7 @@ pub struct DependencyContainer {
 }
 
 impl DependencyContainer {
-    pub fn new() -> Result<Self, DomainError> {
+    pub async fn new() -> Result<Self, DomainError> {
         let client = ReqwestClientFactory::new(HttpClientConfig::default()).build()?;
         let browser_client =
             BrowserServiceClient::new(client.clone(), config::ipo_browser_base_url());
@@ -33,12 +36,13 @@ impl DependencyContainer {
             ExternalSiteScraperAdapter::new(client.clone(), config::external_scraper_base_url()),
             SecuritiesSiteScraperAdapter::new(browser_client),
         );
+        let db = Arc::new(build_firestore_client(&config::firebase_project_id()).await?);
 
         Ok(Self {
-            stock_repository: Arc::new(FirestoreIpoStockRepository::new()),
+            stock_repository: Arc::new(FirestoreIpoStockRepository::new(db.clone())),
             scraper: Arc::new(scraper),
             event_publisher: Arc::new(PubSubEventPublisher::new("ipo-info-fetcher")),
-            operation_log_repository: Arc::new(FirestoreOperationLogRepository::new()),
+            operation_log_repository: Arc::new(FirestoreOperationLogRepository::new(db)),
         })
     }
 

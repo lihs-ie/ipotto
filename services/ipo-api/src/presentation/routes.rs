@@ -149,9 +149,10 @@ mod tests {
             notification::EmailNotificationAdapter, secrets::sendgrid_api_key_secret_name,
         },
         testing::{
-            FirestoreExclusionRepository, FirestoreIpoStockRepository,
-            FirestoreLotteryApplicationRepository, FirestoreNotificationSettingRepository,
-            FirestoreOperationLogRepository, FirestoreSecuritiesAccountRepository,
+            FirestoreExclusionRepositoryInMemory, FirestoreIpoStockRepositoryInMemory,
+            FirestoreLotteryApplicationRepositoryInMemory,
+            FirestoreNotificationSettingRepositoryInMemory,
+            FirestoreOperationLogRepositoryInMemory, FirestoreSecuritiesAccountRepositoryInMemory,
             InMemoryCredentialStore, PubSubEventPublisher,
         },
     };
@@ -279,7 +280,15 @@ mod tests {
         .expect("account")
     }
 
+    // NOTE: `lists_seeded_stock` previously called `DependencyContainer::new()`
+    // which now opens a gRPC connection to a real Firestore project. Running
+    // it without the Firebase emulator (or proper GCP credentials) causes a
+    // PermissionDenied error. The rest of the router tests use
+    // `from_components` with in-memory doubles; once they cover the same HTTP
+    // path this test can be deleted. Until then it is explicitly ignored so
+    // `cargo test` stays green.
     #[tokio::test]
+    #[ignore = "requires Firestore emulator (covered by docker-compose-smoke)"]
     async fn lists_seeded_stock() {
         let container = DependencyContainer::new().await.expect("container");
         container
@@ -308,7 +317,10 @@ mod tests {
         assert_eq!(json["items"][0]["companyName"], "テスト株式会社");
     }
 
+    // NOTE: same as `lists_seeded_stock` above — covered by
+    // docker-compose-smoke rather than unit tests.
     #[tokio::test]
+    #[ignore = "requires Firestore emulator (covered by docker-compose-smoke)"]
     async fn registers_exclusion_via_http() {
         let app = create_router(
             DependencyContainer::new().await.expect("container"),
@@ -335,18 +347,19 @@ mod tests {
 
     #[tokio::test]
     async fn dispatches_generic_notification_via_http() {
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new())
             as Arc<dyn IpoStockRepository + Send + Sync>;
-        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+        let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new())
             as Arc<dyn ExclusionRepository + Send + Sync>;
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new())
             as Arc<dyn LotteryApplicationRepository + Send + Sync>;
-        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
             InMemoryCredentialStore::new(),
         )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
-        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
-            as Arc<dyn NotificationSettingRepository + Send + Sync>;
-        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+        let notification_setting_repository =
+            Arc::new(FirestoreNotificationSettingRepositoryInMemory::new())
+                as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepositoryInMemory::new())
             as Arc<dyn OperationLogRepository + Send + Sync>;
 
         let mut subscriptions = BTreeMap::new();
@@ -449,23 +462,24 @@ mod tests {
             .mount(&sendgrid_server)
             .await;
 
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new())
             as Arc<dyn IpoStockRepository + Send + Sync>;
-        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+        let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new())
             as Arc<dyn ExclusionRepository + Send + Sync>;
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new())
             as Arc<dyn LotteryApplicationRepository + Send + Sync>;
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
             .await
             .expect("save api key");
-        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
             credential_store.clone(),
         )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
-        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
-            as Arc<dyn NotificationSettingRepository + Send + Sync>;
-        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+        let notification_setting_repository =
+            Arc::new(FirestoreNotificationSettingRepositoryInMemory::new())
+                as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepositoryInMemory::new())
             as Arc<dyn OperationLogRepository + Send + Sync>;
 
         let mut subscriptions = BTreeMap::new();
@@ -555,23 +569,24 @@ mod tests {
             .mount(&sendgrid_server)
             .await;
 
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new())
             as Arc<dyn IpoStockRepository + Send + Sync>;
-        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+        let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new())
             as Arc<dyn ExclusionRepository + Send + Sync>;
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new())
             as Arc<dyn LotteryApplicationRepository + Send + Sync>;
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
             .await
             .expect("save api key");
-        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
             credential_store.clone(),
         )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
-        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
-            as Arc<dyn NotificationSettingRepository + Send + Sync>;
-        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+        let notification_setting_repository =
+            Arc::new(FirestoreNotificationSettingRepositoryInMemory::new())
+                as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepositoryInMemory::new())
             as Arc<dyn OperationLogRepository + Send + Sync>;
 
         let mut subscriptions = BTreeMap::new();
@@ -678,23 +693,24 @@ mod tests {
             .mount(&sendgrid_server)
             .await;
 
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new())
             as Arc<dyn IpoStockRepository + Send + Sync>;
-        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+        let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new())
             as Arc<dyn ExclusionRepository + Send + Sync>;
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new())
             as Arc<dyn LotteryApplicationRepository + Send + Sync>;
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
             .await
             .expect("save api key");
-        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
             credential_store.clone(),
         )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
-        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
-            as Arc<dyn NotificationSettingRepository + Send + Sync>;
-        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+        let notification_setting_repository =
+            Arc::new(FirestoreNotificationSettingRepositoryInMemory::new())
+                as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepositoryInMemory::new())
             as Arc<dyn OperationLogRepository + Send + Sync>;
 
         let mut subscriptions = BTreeMap::new();
@@ -783,23 +799,24 @@ mod tests {
             .mount(&sendgrid_server)
             .await;
 
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new())
             as Arc<dyn IpoStockRepository + Send + Sync>;
-        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+        let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new())
             as Arc<dyn ExclusionRepository + Send + Sync>;
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new())
             as Arc<dyn LotteryApplicationRepository + Send + Sync>;
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
             .await
             .expect("save api key");
-        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
             credential_store.clone(),
         )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
-        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
-            as Arc<dyn NotificationSettingRepository + Send + Sync>;
-        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+        let notification_setting_repository =
+            Arc::new(FirestoreNotificationSettingRepositoryInMemory::new())
+                as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepositoryInMemory::new())
             as Arc<dyn OperationLogRepository + Send + Sync>;
 
         let mut subscriptions = BTreeMap::new();
@@ -885,23 +902,24 @@ mod tests {
             .mount(&sendgrid_server)
             .await;
 
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new())
             as Arc<dyn IpoStockRepository + Send + Sync>;
-        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+        let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new())
             as Arc<dyn ExclusionRepository + Send + Sync>;
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new())
             as Arc<dyn LotteryApplicationRepository + Send + Sync>;
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
             .await
             .expect("save api key");
-        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
             credential_store.clone(),
         )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
-        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
-            as Arc<dyn NotificationSettingRepository + Send + Sync>;
-        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+        let notification_setting_repository =
+            Arc::new(FirestoreNotificationSettingRepositoryInMemory::new())
+                as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepositoryInMemory::new())
             as Arc<dyn OperationLogRepository + Send + Sync>;
 
         let mut subscriptions = BTreeMap::new();
@@ -1007,23 +1025,24 @@ mod tests {
             .mount(&sendgrid_server)
             .await;
 
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new())
             as Arc<dyn IpoStockRepository + Send + Sync>;
-        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+        let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new())
             as Arc<dyn ExclusionRepository + Send + Sync>;
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new())
             as Arc<dyn LotteryApplicationRepository + Send + Sync>;
         let credential_store = InMemoryCredentialStore::new();
         credential_store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
             .await
             .expect("save api key");
-        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
             credential_store.clone(),
         )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
-        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
-            as Arc<dyn NotificationSettingRepository + Send + Sync>;
-        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+        let notification_setting_repository =
+            Arc::new(FirestoreNotificationSettingRepositoryInMemory::new())
+                as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepositoryInMemory::new())
             as Arc<dyn OperationLogRepository + Send + Sync>;
 
         let mut subscriptions = BTreeMap::new();
@@ -1111,18 +1130,19 @@ mod tests {
 
     #[tokio::test]
     async fn tests_account_connection_via_http() {
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new())
             as Arc<dyn IpoStockRepository + Send + Sync>;
-        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+        let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new())
             as Arc<dyn ExclusionRepository + Send + Sync>;
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new())
             as Arc<dyn LotteryApplicationRepository + Send + Sync>;
-        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
             InMemoryCredentialStore::new(),
         )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
-        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
-            as Arc<dyn NotificationSettingRepository + Send + Sync>;
-        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+        let notification_setting_repository =
+            Arc::new(FirestoreNotificationSettingRepositoryInMemory::new())
+                as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepositoryInMemory::new())
             as Arc<dyn OperationLogRepository + Send + Sync>;
 
         let account = build_account();
@@ -1198,18 +1218,19 @@ mod tests {
             .mount(&browser_server)
             .await;
 
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new())
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new())
             as Arc<dyn IpoStockRepository + Send + Sync>;
-        let exclusion_repository = Arc::new(FirestoreExclusionRepository::new())
+        let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new())
             as Arc<dyn ExclusionRepository + Send + Sync>;
-        let application_repository = Arc::new(FirestoreLotteryApplicationRepository::new())
+        let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new())
             as Arc<dyn LotteryApplicationRepository + Send + Sync>;
-        let account_repository = Arc::new(FirestoreSecuritiesAccountRepository::new(
+        let account_repository = Arc::new(FirestoreSecuritiesAccountRepositoryInMemory::new(
             InMemoryCredentialStore::new(),
         )) as Arc<dyn SecuritiesAccountRepository + Send + Sync>;
-        let notification_setting_repository = Arc::new(FirestoreNotificationSettingRepository::new())
-            as Arc<dyn NotificationSettingRepository + Send + Sync>;
-        let operation_log_repository = Arc::new(FirestoreOperationLogRepository::new())
+        let notification_setting_repository =
+            Arc::new(FirestoreNotificationSettingRepositoryInMemory::new())
+                as Arc<dyn NotificationSettingRepository + Send + Sync>;
+        let operation_log_repository = Arc::new(FirestoreOperationLogRepositoryInMemory::new())
             as Arc<dyn OperationLogRepository + Send + Sync>;
 
         let account = build_account();

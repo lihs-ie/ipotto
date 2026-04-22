@@ -8,9 +8,12 @@ use ipo_backend_shared::{
     },
     errors::DomainError,
     infrastructure::{
-        firestore::repositories::{
-            FirestoreIpoStockRepository, FirestoreLotteryApplicationRepository,
-            FirestoreOperationLogRepository, FirestoreSecuritiesAccountRepository,
+        firestore::{
+            build_firestore_client,
+            repositories::{
+                FirestoreIpoStockRepository, FirestoreLotteryApplicationRepository,
+                FirestoreOperationLogRepository, FirestoreSecuritiesAccountRepository,
+            },
         },
         http_client::{HttpClientConfig, ReqwestClientFactory},
         messaging::PubSubEventPublisher,
@@ -31,13 +34,18 @@ pub struct DependencyContainer {
 }
 
 impl DependencyContainer {
-    pub fn new() -> Result<Self, DomainError> {
+    pub async fn new() -> Result<Self, DomainError> {
         let client = ReqwestClientFactory::new(HttpClientConfig::default()).build()?;
-        let credential_store = InMemoryCredentialStore::new();
+        let credential_store: Arc<dyn ipo_backend_shared::acl::secrets::CredentialStorePort> =
+            Arc::new(InMemoryCredentialStore::new());
+        let db = Arc::new(build_firestore_client(&config::firebase_project_id()).await?);
         Ok(Self {
-            application_repository: Arc::new(FirestoreLotteryApplicationRepository::new()),
-            stock_repository: Arc::new(FirestoreIpoStockRepository::new()),
+            application_repository: Arc::new(FirestoreLotteryApplicationRepository::new(
+                db.clone(),
+            )),
+            stock_repository: Arc::new(FirestoreIpoStockRepository::new(db.clone())),
             account_repository: Arc::new(FirestoreSecuritiesAccountRepository::new(
+                db.clone(),
                 credential_store,
             )),
             browser_port: Arc::new(BrowserServiceClient::new(
@@ -45,7 +53,7 @@ impl DependencyContainer {
                 config::ipo_browser_base_url(),
             )),
             event_publisher: Arc::new(PubSubEventPublisher::new("ipo-result-checker")),
-            operation_log_repository: Arc::new(FirestoreOperationLogRepository::new()),
+            operation_log_repository: Arc::new(FirestoreOperationLogRepository::new(db)),
         })
     }
 

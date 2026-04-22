@@ -268,7 +268,8 @@ mod tests {
         domain::stock::IpoStockRepository,
         infrastructure::messaging::PubSubEventEnvelope,
         testing::{
-            FirestoreIpoStockRepository, FirestoreOperationLogRepository, PubSubEventPublisher,
+            FirestoreIpoStockRepositoryInMemory, FirestoreOperationLogRepositoryInMemory,
+            PubSubEventPublisher,
         },
     };
 
@@ -290,7 +291,7 @@ mod tests {
 
     #[derive(Debug, Default)]
     struct CountingStockRepository {
-        inner: FirestoreIpoStockRepository,
+        inner: FirestoreIpoStockRepositoryInMemory,
         find_all_calls: AtomicUsize,
     }
 
@@ -352,7 +353,7 @@ mod tests {
 
     #[tokio::test]
     async fn saves_new_stock_and_publishes_event() {
-        let stock_repository = Arc::new(FirestoreIpoStockRepository::new());
+        let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
         let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-info-fetcher"));
         let use_case = FetchIpoStocksUseCase::new(
             stock_repository.clone(),
@@ -374,7 +375,7 @@ mod tests {
                 )],
             }),
             event_publisher.clone(),
-            Arc::new(FirestoreOperationLogRepository::new()),
+            Arc::new(FirestoreOperationLogRepositoryInMemory::new()),
         );
 
         let output = use_case.execute().await.expect("execute");
@@ -445,7 +446,7 @@ mod tests {
                 ],
             }),
             Arc::new(PubSubEventPublisher::new("ipo-info-fetcher")),
-            Arc::new(FirestoreOperationLogRepository::new()),
+            Arc::new(FirestoreOperationLogRepositoryInMemory::new()),
         );
 
         let output = use_case.execute().await.expect("execute");

@@ -1,50 +1,57 @@
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::Arc;
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use firestore::{path, FirestoreDb};
 
 use crate::{
     domain::operation_log::{OperationEventType, OperationLog, OperationLogRepository},
     errors::DomainError,
-    infrastructure::firestore::documents::OperationLogDocument,
+    infrastructure::firestore::{collections, documents::OperationLogDocument},
 };
 
-/// Concrete operation log repository with Firestore-oriented document mapping.
-#[derive(Debug, Clone, Default)]
+/// Production Firestore-backed implementation of
+/// [`OperationLogRepository`]. Persists log entries to the
+/// `operation_logs` collection.
+#[derive(Debug, Clone)]
 pub struct FirestoreOperationLogRepository {
-    documents: Arc<Mutex<BTreeMap<String, OperationLogDocument>>>,
+    db: Arc<FirestoreDb>,
 }
 
 impl FirestoreOperationLogRepository {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(db: Arc<FirestoreDb>) -> Self {
+        Self { db }
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl OperationLogRepository for FirestoreOperationLogRepository {
     async fn save(&self, log: &OperationLog) -> Result<(), DomainError> {
-        self.documents
-            .lock()
-            .map_err(|error| DomainError::FirestoreMappingError {
-                reason: error.to_string(),
-            })?
-            .insert(
-                log.identifier().value().to_string(),
-                OperationLogDocument::from_domain(log),
-            );
+        let document = OperationLogDocument::from_domain(log);
+        self.db
+            .fluent()
+            .update()
+            .in_col(collections::OPERATION_LOGS)
+            .document_id(log.identifier().value())
+            .object(&document)
+            .execute::<()>()
+            .await
+            .map_err(map_firestore_error)?;
         Ok(())
     }
 
     async fn find_all(&self) -> Result<Vec<OperationLog>, DomainError> {
-        self.documents
-            .lock()
-            .map_err(|error| DomainError::FirestoreMappingError {
-                reason: error.to_string(),
-            })?
-            .values()
+        let documents: Vec<OperationLogDocument> = self
+            .db
+            .fluent()
+            .select()
+            .from(collections::OPERATION_LOGS)
+            .obj::<OperationLogDocument>()
+            .query()
+            .await
+            .map_err(map_firestore_error)?;
+        documents
+            .into_iter()
             .map(|document| document.to_domain())
             .collect()
     }
@@ -54,95 +61,57 @@ impl OperationLogRepository for FirestoreOperationLogRepository {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<OperationLog>, DomainError> {
-        self.find_all().await.map(|logs| {
-            logs.into_iter()
-                .filter(|log| log.executed_at() >= start && log.executed_at() <= end)
-                .collect()
-        })
+        let documents: Vec<OperationLogDocument> = self
+            .db
+            .fluent()
+            .select()
+            .from(collections::OPERATION_LOGS)
+            .filter(|q| {
+                q.for_all([
+                    q.field(path!(OperationLogDocument::executed_at))
+                        .greater_than_or_equal(start),
+                    q.field(path!(OperationLogDocument::executed_at))
+                        .less_than_or_equal(end),
+                ])
+            })
+            .obj::<OperationLogDocument>()
+            .query()
+            .await
+            .map_err(map_firestore_error)?;
+        documents
+            .into_iter()
+            .map(|document| document.to_domain())
+            .collect()
     }
 
     async fn find_by_event_type(
         &self,
         event_type: OperationEventType,
     ) -> Result<Vec<OperationLog>, DomainError> {
-        self.find_all().await.map(|logs| {
-            logs.into_iter()
-                .filter(|log| log.event_type() == event_type)
-                .collect()
-        })
+        let event_type_value = event_type.as_str().to_string();
+        let documents: Vec<OperationLogDocument> = self
+            .db
+            .fluent()
+            .select()
+            .from(collections::OPERATION_LOGS)
+            .filter(|q| {
+                q.for_all([q
+                    .field(path!(OperationLogDocument::event_type))
+                    .eq(&event_type_value)])
+            })
+            .obj::<OperationLogDocument>()
+            .query()
+            .await
+            .map_err(map_firestore_error)?;
+        documents
+            .into_iter()
+            .map(|document| document.to_domain())
+            .collect()
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use chrono::{TimeZone, Utc};
-
-    use super::FirestoreOperationLogRepository;
-    use crate::domain::operation_log::{
-        OperationEventType, OperationLog, OperationLogPayload, OperationLogRepository,
-        OperationStatus,
-    };
-
-    fn build_log(
-        event_type: OperationEventType,
-        status: OperationStatus,
-        executed_at: chrono::DateTime<Utc>,
-    ) -> OperationLog {
-        OperationLog::create(OperationLogPayload::new(
-            None,
-            event_type,
-            "ipo-service",
-            status,
-            "executed",
-            None,
-            executed_at,
-        ))
-        .expect("log")
-    }
-
-    #[tokio::test]
-    async fn filters_operation_logs() {
-        let repository = FirestoreOperationLogRepository::new();
-        let first = build_log(
-            OperationEventType::FetchStocks,
-            OperationStatus::Succeeded,
-            Utc.with_ymd_and_hms(2026, 4, 1, 9, 0, 0)
-                .single()
-                .expect("first"),
-        );
-        let second = build_log(
-            OperationEventType::ConnectionTest,
-            OperationStatus::Failed,
-            Utc.with_ymd_and_hms(2026, 4, 3, 9, 0, 0)
-                .single()
-                .expect("second"),
-        );
-
-        repository.save(&first).await.expect("save first");
-        repository.save(&second).await.expect("save second");
-
-        assert_eq!(
-            repository
-                .find_by_event_type(OperationEventType::ConnectionTest)
-                .await
-                .expect("by event")
-                .len(),
-            1
-        );
-        assert_eq!(
-            repository
-                .find_by_date_range(
-                    Utc.with_ymd_and_hms(2026, 4, 2, 0, 0, 0)
-                        .single()
-                        .expect("start"),
-                    Utc.with_ymd_and_hms(2026, 4, 4, 0, 0, 0)
-                        .single()
-                        .expect("end"),
-                )
-                .await
-                .expect("by range")
-                .len(),
-            1
-        );
+fn map_firestore_error(error: firestore::errors::FirestoreError) -> DomainError {
+    DomainError::FirestoreMappingError {
+        reason: error.to_string(),
     }
 }
