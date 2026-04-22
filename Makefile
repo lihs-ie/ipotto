@@ -175,6 +175,30 @@ ci-lint: ## 全ワークフローのlint
 	actrun lint .github/workflows/ci.yml .github/workflows/ci-integration.yml .github/workflows/e2e.yml
 
 # ============================================================
+# Deploy / Rollback (Phase 6 Sprint 13)
+# ============================================================
+
+.PHONY: deploy-stg deploy-prd rollback-stg rollback-prd pre-deploy-smoke-stg pre-deploy-smoke-prd
+
+deploy-stg: ## Staging 環境に全 5 サービスをデプロイ
+	@bash scripts/deploy.sh stg
+
+deploy-prd: ## Production 環境に全 5 サービスをデプロイ (Go 判定後に実行)
+	@bash scripts/deploy.sh prd
+
+rollback-stg: ## Staging の <SERVICE> を前 revision にロールバック (make rollback-stg SERVICE=ipo-api)
+	@bash scripts/rollback.sh stg $(SERVICE)
+
+rollback-prd: ## Production の <SERVICE> を前 revision にロールバック (make rollback-prd SERVICE=ipo-api)
+	@bash scripts/rollback.sh prd $(SERVICE)
+
+pre-deploy-smoke-stg: ## Staging の pre-deploy smoke を走らせる
+	@bash scripts/pre-deploy-smoke.sh stg
+
+pre-deploy-smoke-prd: ## Production の pre-deploy smoke を走らせる
+	@bash scripts/pre-deploy-smoke.sh prd
+
+# ============================================================
 # Help
 # ============================================================
 
