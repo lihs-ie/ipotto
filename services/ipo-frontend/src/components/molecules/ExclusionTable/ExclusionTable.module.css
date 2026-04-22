@@ -1,0 +1,26 @@
+.container {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #fff;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.container thead {
+  background-color: #f3f4f6;
+}
+
+.container th,
+.container td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  font-size: 0.875rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.empty {
+  text-align: center;
+  color: #6b7280;
+  padding: 1.5rem;
+}
