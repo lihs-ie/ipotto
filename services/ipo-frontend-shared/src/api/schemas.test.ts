@@ -284,7 +284,7 @@ describe("API-009/010/011/013 accounts", () => {
 });
 
 describe("API-014 operation logs", () => {
-  it("parses list response with cursor", () => {
+  it("parses list response with cursor + hasMore", () => {
     const payload = {
       items: [
         {
@@ -299,10 +299,20 @@ describe("API-014 operation logs", () => {
         },
       ],
       nextCursor: "opaque-cursor",
+      hasMore: true,
     };
-    expect(listOperationLogsResponseSchema.parse(payload).items).toHaveLength(
-      1,
-    );
+    const parsed = listOperationLogsResponseSchema.parse(payload);
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.hasMore).toBe(true);
+  });
+
+  it("rejects response missing hasMore field", () => {
+    expect(() =>
+      listOperationLogsResponseSchema.parse({
+        items: [],
+        nextCursor: null,
+      }),
+    ).toThrow();
   });
 
   it("validates query pagination", () => {

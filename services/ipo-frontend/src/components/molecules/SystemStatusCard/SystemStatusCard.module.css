@@ -1,0 +1,45 @@
+.container {
+  padding: 1rem;
+  background-color: #fff;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.list {
+  margin: 0.75rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background-color: #f9fafb;
+  border-radius: 0.375rem;
+}
+
+.label {
+  margin: 0;
+  font-weight: 600;
+  color: #374151;
+}
+
+.value {
+  margin: 0;
+  color: #111827;
+}
+
+.value[data-status="healthy"] {
+  color: #15803d;
+}
+
+.value[data-status="degraded"] {
+  color: #b45309;
+}
+
+.value[data-status="down"] {
+  color: #b91c1c;
+}

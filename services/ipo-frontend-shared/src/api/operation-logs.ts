@@ -37,6 +37,7 @@ export type ListOperationLogsQuery = z.infer<
 export const listOperationLogsResponseSchema = z.object({
   items: z.array(operationLogSummarySchema),
   nextCursor: z.string().nullable(),
+  hasMore: z.boolean(),
 });
 export type ListOperationLogsResponse = z.infer<
   typeof listOperationLogsResponseSchema
