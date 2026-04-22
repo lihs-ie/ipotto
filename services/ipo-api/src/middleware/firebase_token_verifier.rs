@@ -93,7 +93,9 @@ impl FirebaseTokenVerifier {
         let token_data =
             decode::<FirebaseClaims>(token, &decoding_key, &validation).map_err(map_jwt_error)?;
 
-        VerifiedToken::try_from(token_data.claims)
+        let verified = VerifiedToken::try_from(token_data.claims)?;
+        enforce_google_provider(&verified)?;
+        Ok(verified)
     }
 }
 
@@ -132,6 +134,13 @@ fn decode_unsigned_claims(token: &str) -> Result<FirebaseClaims, FirebaseAuthErr
     serde_json::from_slice(&raw).map_err(|_| FirebaseAuthError::MalformedToken)
 }
 
+fn enforce_google_provider(token: &VerifiedToken) -> Result<(), FirebaseAuthError> {
+    match token.sign_in_provider.as_deref() {
+        Some("google.com") => Ok(()),
+        _ => Err(FirebaseAuthError::ProviderNotSupported),
+    }
+}
+
 fn map_jwt_error(error: jsonwebtoken::errors::Error) -> FirebaseAuthError {
     use jsonwebtoken::errors::ErrorKind;
     match error.kind() {
@@ -155,8 +164,15 @@ struct FirebaseClaims {
     email: Option<String>,
     #[serde(default)]
     email_verified: Option<bool>,
+    #[serde(default)]
+    firebase: Option<FirebaseIdentities>,
     iat: i64,
     exp: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct FirebaseIdentities {
+    sign_in_provider: Option<String>,
 }
 
 impl TryFrom<FirebaseClaims> for VerifiedToken {
@@ -166,10 +182,12 @@ impl TryFrom<FirebaseClaims> for VerifiedToken {
         if claims.sub.is_empty() {
             return Err(FirebaseAuthError::MissingSubject);
         }
+        let sign_in_provider = claims.firebase.and_then(|f| f.sign_in_provider);
         Ok(VerifiedToken::new(
             claims.sub,
             claims.email,
             claims.email_verified.unwrap_or(false),
+            sign_in_provider,
             claims.iat,
             claims.exp,
         ))
@@ -221,8 +239,15 @@ mod tests {
         sub: String,
         email: Option<String>,
         email_verified: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        firebase: Option<TestFirebaseIdentities>,
         iat: i64,
         exp: i64,
+    }
+
+    #[derive(Serialize)]
+    struct TestFirebaseIdentities {
+        sign_in_provider: String,
     }
 
     fn sign_token(claims: &TestClaims, kid: Option<&str>, alg: Algorithm) -> String {
@@ -241,6 +266,9 @@ mod tests {
             sub: "uid-abc".to_string(),
             email: Some("user@example.com".to_string()),
             email_verified: true,
+            firebase: Some(TestFirebaseIdentities {
+                sign_in_provider: "google.com".to_string(),
+            }),
             iat: now - 10,
             exp: now + 600,
         }
@@ -315,6 +343,30 @@ mod tests {
 
         let result = verifier.verify(&token).await;
         assert_eq!(result.unwrap_err(), FirebaseAuthError::UnknownKeyId);
+    }
+
+    #[tokio::test]
+    async fn rejects_non_google_provider() {
+        let verifier = build_verifier(None);
+        let mut claims = valid_claims();
+        claims.firebase = Some(TestFirebaseIdentities {
+            sign_in_provider: "password".to_string(),
+        });
+        let token = sign_token(&claims, Some(TEST_KID), Algorithm::RS256);
+
+        let result = verifier.verify(&token).await;
+        assert_eq!(result.unwrap_err(), FirebaseAuthError::ProviderNotSupported);
+    }
+
+    #[tokio::test]
+    async fn rejects_token_without_firebase_claim() {
+        let verifier = build_verifier(None);
+        let mut claims = valid_claims();
+        claims.firebase = None;
+        let token = sign_token(&claims, Some(TEST_KID), Algorithm::RS256);
+
+        let result = verifier.verify(&token).await;
+        assert_eq!(result.unwrap_err(), FirebaseAuthError::ProviderNotSupported);
     }
 
     #[tokio::test]

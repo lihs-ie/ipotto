@@ -16,6 +16,7 @@ pub enum FirebaseAuthError {
     InvalidIssuer,
     InvalidAudience,
     MissingSubject,
+    ProviderNotSupported,
     JwksFetchFailed(String),
 }
 
@@ -32,12 +33,14 @@ impl FirebaseAuthError {
             | Self::InvalidSignature => "TOKEN_INVALID",
             Self::ExpiredToken => "TOKEN_EXPIRED",
             Self::InvalidIssuer | Self::InvalidAudience | Self::MissingSubject => "TOKEN_REJECTED",
+            Self::ProviderNotSupported => "AUTHORIZATION_PROVIDER_UNSUPPORTED",
             Self::JwksFetchFailed(_) => "AUTH_BACKEND_UNAVAILABLE",
         }
     }
 
     fn status(&self) -> StatusCode {
         match self {
+            Self::ProviderNotSupported => StatusCode::FORBIDDEN,
             Self::JwksFetchFailed(_) => StatusCode::SERVICE_UNAVAILABLE,
             _ => StatusCode::UNAUTHORIZED,
         }
@@ -56,6 +59,7 @@ impl FirebaseAuthError {
             Self::InvalidIssuer => "IDトークンの発行者が不正です",
             Self::InvalidAudience => "IDトークンの audience が不正です",
             Self::MissingSubject => "IDトークンに subject が含まれていません",
+            Self::ProviderNotSupported => "Google 認証以外のプロバイダはサポートされていません",
             Self::JwksFetchFailed(_) => "認証サービスとの通信に失敗しました",
         }
     }
@@ -112,5 +116,12 @@ mod tests {
     fn maps_backend_fetch_failure_to_503() {
         let error = FirebaseAuthError::JwksFetchFailed("connection refused".to_string());
         assert_eq!(error.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn maps_provider_not_supported_to_403() {
+        let error = FirebaseAuthError::ProviderNotSupported;
+        assert_eq!(error.status(), StatusCode::FORBIDDEN);
+        assert_eq!(error.code(), "AUTHORIZATION_PROVIDER_UNSUPPORTED");
     }
 }

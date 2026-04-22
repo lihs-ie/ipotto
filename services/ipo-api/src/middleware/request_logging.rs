@@ -68,6 +68,7 @@ mod tests {
             "uid-123",
             Some("alice@example.com".to_string()),
             true,
+            Some("google.com".to_string()),
             1_000,
             2_000,
         );
@@ -95,7 +96,7 @@ mod tests {
 
     #[test]
     fn passes_through_verified_token_without_email() {
-        let verified = VerifiedToken::new("uid-abc", None, false, 1_000, 2_000);
+        let verified = VerifiedToken::new("uid-abc", None, false, None, 1_000, 2_000);
         let mut request = Request::builder()
             .uri("/api/v1/stocks")
             .body(Body::empty())

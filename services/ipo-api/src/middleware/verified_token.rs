@@ -8,6 +8,7 @@ pub struct VerifiedToken {
     pub uid: String,
     pub email: Option<String>,
     pub email_verified: bool,
+    pub sign_in_provider: Option<String>,
     pub issued_at: i64,
     pub expires_at: i64,
 }
@@ -17,6 +18,7 @@ impl VerifiedToken {
         uid: impl Into<String>,
         email: Option<String>,
         email_verified: bool,
+        sign_in_provider: Option<String>,
         issued_at: i64,
         expires_at: i64,
     ) -> Self {
@@ -24,6 +26,7 @@ impl VerifiedToken {
             uid: uid.into(),
             email,
             email_verified,
+            sign_in_provider,
             issued_at,
             expires_at,
         }
@@ -40,12 +43,14 @@ mod tests {
             "uid-123",
             Some("user@example.com".to_string()),
             true,
+            Some("google.com".to_string()),
             1_000,
             2_000,
         );
         assert_eq!(token.uid, "uid-123");
         assert_eq!(token.email.as_deref(), Some("user@example.com"));
         assert!(token.email_verified);
+        assert_eq!(token.sign_in_provider.as_deref(), Some("google.com"));
         assert_eq!(token.issued_at, 1_000);
         assert_eq!(token.expires_at, 2_000);
     }

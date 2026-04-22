@@ -31,7 +31,10 @@ IPOtto の本番運用開始 (Sprint 13) に先立って、`docs/09-security-des
 - [ ] **運用側 TODO** — GCP console で Firebase Admin 権限を持つアカウントに 2FA を必須化 (本番リリース直前に手動設定)
 
 ### 1.4 Google Sign-In provider のみ許可
-- [ ] **未実装** — バックエンドは provider 情報を検証していない (どの Firebase provider でも通る)。許可リスト + emulator フラグで実害は抑えられているが、将来的に `firebase.sign_in_provider == "google.com"` を claim から強制することを推奨。
+- [x] **実装済 (Sprint 14)** (`services/ipo-api/src/middleware/firebase_token_verifier.rs`)
+- 本番モードで `firebase.sign_in_provider == "google.com"` を必須化
+- 非 Google provider は 403 Forbidden + `AUTHORIZATION_PROVIDER_UNSUPPORTED`
+- Emulator mode ではスキップ (emulator は `firebase` claim を生成しない場合がある)
 
 ---
 
@@ -116,7 +119,8 @@ IPOtto の本番運用開始 (Sprint 13) に先立って、`docs/09-security-des
 - 通知先はメール (`alert_email_recipients`)
 
 ### 5.5 監査ログ (Cloud Audit Logs)
-- [ ] **default 設定のまま** — GCP Admin Activity ログは自動だが、Data Access ログは未有効化。秘密情報へのアクセス追跡が必要なら Sprint 13 以降で検討
+- [x] **実装済 (Sprint 14)** (`terraform/modules/observability/main.tf`)
+- `google_project_iam_audit_config` で Secret Manager / Firestore / Cloud Storage の DATA_READ / DATA_WRITE / ADMIN_READ を有効化
 
 ---
 
@@ -129,8 +133,9 @@ IPOtto の本番運用開始 (Sprint 13) に先立って、`docs/09-security-des
 - [x] **実装済** — `.github/workflows/security-scan.yml` で `pnpm audit` を毎週日曜実行
 
 ### 6.3 Docker image の脆弱性スキャン
-- [ ] **未実装** — container layer に対する trivy / grype 等のスキャンは Sprint 13 以降で検討
-- 当面は base image (node:24-bookworm-slim, rust:1.94.1-slim) のパッチ適用を月次で行う運用で代替
+- [x] **実装済 (Sprint 14)** (`.github/workflows/security-scan.yml`)
+- `aquasecurity/trivy-action` で 6 サービスの Dockerfile を scan
+- HIGH / CRITICAL で fail、unfixed は ignore
 
 ### 6.4 依存バージョンの固定
 - [x] **実装済** — `Cargo.lock` と `pnpm-lock.yaml` を git 管理、`--frozen-lockfile` で CI 強制
@@ -140,8 +145,10 @@ IPOtto の本番運用開始 (Sprint 13) に先立って、`docs/09-security-des
 ## 7. レート制限とアビュース対策
 
 ### 7.1 HTTP レート制限
-- [ ] **未実装** — 現在 Cloud Run + Firebase Auth の基本機能のみ。allowlist で攻撃面を縮小しているが、DDoS 防御としては不十分
-- 将来的に `tower::ServiceBuilder` の `rate_limit` ミドルウェア、または Cloud Armor を検討
+- [x] **実装済 (Sprint 14)** (`services/ipo-api/src/middleware/rate_limit.rs`)
+- per-uid sliding window: 100 req/min
+- 超過時 429 Too Many Requests + `Retry-After` ヘッダ
+- Cloud Armor / CDN による DDoS 防御は Phase 8 候補
 
 ### 7.2 ブラウザ自動化のレート制限
 - [x] **実装済** — `services/ipo-browser` は per-request で 1 Playwright context、並列数は Cloud Run の concurrency (1 req/instance) で抑制
@@ -155,15 +162,18 @@ IPOtto の本番運用開始 (Sprint 13) に先立って、`docs/09-security-des
 ## 8. データ保護
 
 ### 8.1 Firestore セキュリティルール
-- [ ] **default (reject-all) のまま** — クライアント直接アクセスは使わず、全て ipo-api 経由のため実害なし。ただし Firebase console で明示的に deny-all を宣言するとより防御的
-- 対応: Sprint 13 でルールファイル (`firestore.rules`) を追加
+- [x] **実装済 (Sprint 14)** (`firestore.rules` + `terraform/modules/firestore/main.tf`)
+- 全 collection で `allow read, write: if false` を宣言
+- Terraform `google_firebaserules_ruleset` / `google_firebaserules_release` で stg / prd にデプロイ
 
 ### 8.2 Pub/Sub の暗号化
 - [x] **デフォルト有効** — Pub/Sub メッセージは GCP 側で AES-256 at-rest
 - [ ] **CMEK (customer-managed encryption key)** は未設定。要件次第で Sprint 13 以降で検討
 
 ### 8.3 Firestore のバックアップ
-- [ ] **未実装** — Sprint 13 で Cloud Scheduler + Export ジョブを terraform 化する
+- [x] **実装済 (Sprint 14)** (`terraform/modules/firestore/backup.tf`)
+- `google_firestore_backup_schedule` で日次 + 週次 (日曜) バックアップ
+- retention: stg 3d / 7d、prd 7d / 14d
 
 ### 8.4 PII 収集の最小化
 - [x] **実装済** — アプリが保持する PII は `email` のみ (Firebase Auth 経由)。証券口座認証情報は Secret Manager で暗号化保管、平文でログに出さない
@@ -188,15 +198,19 @@ IPOtto の本番運用開始 (Sprint 13) に先立って、`docs/09-security-des
 
 ---
 
-## 10. Sprint 13 持ち越し
+## 10. Sprint 14 完了 (Phase 7 ハードニング)
 
-- [ ] Firebase Auth console 2FA (運用手順) — §1.3
-- [ ] Google provider 強制 — §1.4
-- [ ] Cloud Audit Data Access logs 有効化 — §5.5
-- [ ] Docker image 脆弱性スキャン (trivy) CI 組込 — §6.3
-- [ ] HTTP レート制限 / Cloud Armor — §7.1
-- [ ] Firestore security rules `reject-all` 宣言 — §8.1
-- [ ] Pub/Sub CMEK 検討 — §8.2
-- [ ] Firestore 自動バックアップ — §8.3
+以下の項目は Sprint 14 (PR: feat/phase7-sprint14-hardening) で実装済み:
 
-Sprint 13 の "本番リリース" チェックリスト開始時に、本セクションを再レビューして deployment-ready の判定を行う。
+- [x] Google provider 強制 — §1.4 → `firebase_token_verifier.rs` で `sign_in_provider == "google.com"` を enforce、403 `AUTHORIZATION_PROVIDER_UNSUPPORTED`
+- [x] Cloud Audit Data Access logs 有効化 — §5.5 → `terraform/modules/observability/main.tf` に `google_project_iam_audit_config` (Secret Manager / Firestore / Cloud Storage)
+- [x] Docker image 脆弱性スキャン (trivy) CI 組込 — §6.3 → `.github/workflows/security-scan.yml` に `trivy-container-scan` ジョブ (6 サービス、HIGH/CRITICAL で fail)
+- [x] HTTP レート制限 — §7.1 → `ipo-api/src/middleware/rate_limit.rs` で per-uid 100 req/min sliding window、429 + `Retry-After`
+- [x] Firestore security rules `reject-all` 宣言 — §8.1 → `firestore.rules` + `terraform/modules/firestore/main.tf` に `google_firebaserules_ruleset` / `google_firebaserules_release`
+- [x] Firestore 自動バックアップ — §8.3 → `terraform/modules/firestore/backup.tf` で日次 + 週次 (stg: 3d/7d, prd: 7d/14d)
+
+### 残存 (運用側 / Phase 8 候補)
+
+- [ ] Firebase Auth console 2FA (運用手順) — §1.3 — GCP console での手動設定が必要
+- [ ] Pub/Sub CMEK 検討 — §8.2 — CMEK 鍵の初期作成は GCP console 操作が必要
+- [ ] Cloud Armor / CDN (DDoS) — Phase 8 候補

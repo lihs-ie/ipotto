@@ -41,3 +41,13 @@ variable "restart_threshold" {
   type        = number
   default     = 3
 }
+
+variable "audit_log_services" {
+  description = "Cloud Audit Data Access logs を有効化する GCP サービス一覧。"
+  type        = list(string)
+  default = [
+    "secretmanager.googleapis.com",
+    "firestore.googleapis.com",
+    "storage.googleapis.com",
+  ]
+}
