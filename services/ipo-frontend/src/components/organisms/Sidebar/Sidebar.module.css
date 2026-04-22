@@ -1,0 +1,36 @@
+.container {
+  padding: 1rem 0;
+  background-color: #f9fafb;
+  border-right: 1px solid #e5e7eb;
+  grid-area: sidebar;
+  min-width: 12rem;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.link {
+  display: block;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.9rem;
+  color: #374151;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+}
+
+.link:hover {
+  background-color: #f3f4f6;
+}
+
+.link[data-active="true"] {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  border-left-color: #2563eb;
+  font-weight: 600;
+}
