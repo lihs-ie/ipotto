@@ -1,19 +1,23 @@
 import type { Metadata } from "next";
 import "@/styles/globals.css";
 
+import { ClientProviders } from "./client-providers";
+
 export const metadata: Metadata = {
   title: "IPOtto",
   description: "IPO抽選申し込み自動化・管理",
 };
 
-export default function RootLayout({
-  children,
-}: {
+type Props = {
   children: React.ReactNode;
-}) {
+};
+
+export default function RootLayout(props: Props) {
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body>
+        <ClientProviders>{props.children}</ClientProviders>
+      </body>
     </html>
   );
 }
