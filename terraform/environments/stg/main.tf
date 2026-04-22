@@ -76,12 +76,15 @@ module "firestore" {
   count  = var.enable_firestore ? 1 : 0
   source = "../../modules/firestore"
 
-  project_id        = var.project_id
-  location_id       = var.firestore.location_id
-  database_name     = var.firestore.database_name
-  database_type     = var.firestore.database_type
-  concurrency_mode  = var.firestore.concurrency_mode
-  composite_indexes = var.firestore.composite_indexes
+  project_id            = var.project_id
+  location_id           = var.firestore.location_id
+  database_name         = var.firestore.database_name
+  database_type         = var.firestore.database_type
+  concurrency_mode      = var.firestore.concurrency_mode
+  composite_indexes     = var.firestore.composite_indexes
+  firestore_rules_path   = "${path.module}/../../../firestore.rules"
+  backup_daily_retention = "259200s"
+  backup_weekly_retention = "604800s"
 
   depends_on = [google_project_service.enabled]
 }

@@ -93,6 +93,10 @@
 - 楽天証券実サイト検証完了
 - Cloud Run本番デプロイ、監視アラート稼働、初回リリース完了
 
+### M7: ポストMVP セキュリティ・運用ハードニング
+- セキュリティチェックリスト Sprint 13 持ち越し項目の消化
+- rate-limit / Google provider 強制 / Firestore reject-all rules / audit log / container scan
+
 ---
 
 ## 4. フェーズとスプリント計画
@@ -243,6 +247,23 @@
 - 13.5 初回リリース・運用ドキュメント整備（`docs/10-operations-design` 追記）
 
 **完了条件:** M6 達成。
+
+---
+
+### Phase 7: ポストMVP セキュリティ・運用ハードニング（Sprint 14, 1週間）
+
+**目的:** Sprint 12 セキュリティチェックリストの持ち越し項目をコードとして消化する。
+
+| タスク | スコープ | 概要 |
+|---|---|---|
+| H1 | ipo-api | per-uid HTTP レート制限 (100 req/min、429 + Retry-After) |
+| H2 | ipo-api | Firebase ID Token の `firebase.sign_in_provider == "google.com"` 強制 (403) |
+| H3 | Terraform + root | Firestore security rules (`allow read, write: if false`) + Terraform module 対応 |
+| H4 | Terraform | Cloud Audit Data Access logs (Secret Manager / Firestore / Cloud Storage) + Firestore 日次・週次バックアップ |
+| H5 | GitHub Actions | Trivy container scan (HIGH/CRITICAL で fail) を `security-scan.yml` に追加 |
+| H6 | docs | ロードマップ Phase 7 追記 + セキュリティチェックリスト Sprint 14 完了 |
+
+**完了条件:** M7 達成。
 
 ---
 
@@ -441,3 +462,4 @@ API-013 `POST /api/v1/accounts/{id}/test` の接続テストは ipo-browser + ht
 | 2026-04-21 | Phase 3 Sprint 6.4 / 6.5 (3 段防御線 + SEV1 通知) を実施。`src/notifications/publisher.ts` で `OperationErrorOccurred` を ipo-api `/internal/pubsub/ipo-notification` に publish (`IPO_API_BASE_URL` env で切替、fetcher injection 可)。`rakutenLogin` に `twoFactorHandler` 引数を追加、submit 後に `imageAuthentication.container` を検出し handler に delegate。`/internal/accounts/test` route が `ImapMailReader` + `runImageAuthentication` + publisher を組み立てて 3 段目 (fallback 通知) まで稼働。`docker-compose.yml` の ipo-browser に `IPO_API_BASE_URL` env 追加。**Sprint 6 完了 → M3 は Sprint 7 (申込・結果取得) のみ残** |
 | 2026-04-22 | Phase 3 Sprint 7 (申込・結果取得フロー) を実施。`ipo-backend-shared` に `ApplicationResult` 値オブジェクト + `BrokerBrowserPort::apply_for_ipo` (default=error) を追加し `ipo-api::BrowserServiceClient` で override (POST /internal/lottery-applications/submit)。`ipo-browser` に `src/flows/apply.ts` / `src/flows/check-result.ts` / `src/routes/lottery-applications.ts` を新設、`src/routes/lottery-results.ts` の stub を実 Playwright フローで置換。selectors.yaml に `applyList` / `applyForm` / `applyResult` / `lotteryResult` を追加、`imageAuthentication` を docs/reference/2段階認証画面.html 準拠の `SotpLoginForOtherChannelForm` + `button.pcmm_emoji-img[id^='emoji_']` を primary / 既存モックを fallback の両対応に拡張。matcher は alt 属性 → onclick 内 `emojiAltClick(…, charaWord)` の 2 段経路で解決 (`extractKeywordFromOnclick`)。HTML mock は apply_success / apply_duplicate / apply_insufficient_balance / apply_failure / result_page を追加し apply_form で stockIdentifier の prefix に応じた action routing、login_page に `?e2e-bypass=1` の 2FA スキップ経路を追加。E2E に `apply.spec.ts` (10) / `check-result.spec.ts` (7) を追加、`ci.yml: docker-compose-smoke` に `/internal/lottery-applications/submit` × 3 + `/internal/lottery-results/check` × 4 の assert を追加。`ApplyForLotteryUseCase` 本体は roadmap §4 の通り Phase 4 Sprint 8 に申し送り。**Phase 3 Sprint 7 完了 → M3 達成**。 |
 | 2026-04-22 | Phase 4 Sprint 8 の先行タスクとして、新サービス `ipo-applier` + `ApplyForLotteryUseCase` (DD-101) を実装。`services/ipo-applier/` に DI container + Pub/Sub push handler (`POST /internal/pubsub/apply`) + UseCase 本体を追加し、`ipo-backend-shared::services::ApplicationEligibilityService` + `SecuritiesAccountRepository::find_active` + `IpoStockRepository::find_in_book_building_period` + `ExclusionRepository::find_all` + `LotteryApplicationRepository::exists_by_stock_and_account` を組み合わせて直積ループを実行。`BrokerBrowserPort::apply_for_ipo` (ipo-api の override を ipo-applier 側にも BrowserServiceClient として実装) 経由で `ipo-browser` に委譲し、成功時は `LotteryApplication.apply()` + Firestore `save` + `ApplicationCompleted` publish、失敗系は `ApplicationFailed` publish + `OperationLog` に `OperationEventType::ApplyLottery` で記録。docker-compose に ipo-applier (PORT=8084) + Dockerfile 追加、ci.yml の Wait for services と docker-compose-smoke に `/health` + `/internal/pubsub/apply` の smoke を追加。unit+integration 9 tests (use case 3 + router 2 + BrowserServiceClient 4) すべて緑。Cloud Run / Cloud Scheduler の terraform 定義は別 PR で対応。 |
+| 2026-04-23 | Phase 7 Sprint 14 ポストMVP セキュリティ・運用ハードニングを実施。H1: per-uid rate-limit middleware (100 req/min, 429 + Retry-After)、H2: Google provider 強制 (firebase.sign_in_provider == google.com, 403)、H3: Firestore security rules (reject-all + Terraform)、H4: Cloud Audit Data Access logs + Firestore 日次/週次バックアップ (Terraform)、H5: Trivy container scan (security-scan.yml)、H6: ロードマップ + チェックリスト更新。**M7 達成**。 |

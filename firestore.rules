@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // IPOtto は全データアクセスをバックエンド (service account) 経由で行う。
+    // クライアント SDK からの直接アクセスは一切許可しない。
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

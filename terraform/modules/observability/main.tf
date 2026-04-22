@@ -1,3 +1,20 @@
+resource "google_project_iam_audit_config" "data_access" {
+  for_each = toset(var.audit_log_services)
+
+  project = var.project_id
+  service = each.value
+
+  audit_log_config {
+    log_type = "DATA_READ"
+  }
+  audit_log_config {
+    log_type = "DATA_WRITE"
+  }
+  audit_log_config {
+    log_type = "ADMIN_READ"
+  }
+}
+
 locals {
   service_filter = length(var.cloud_run_service_names) == 0 ? "" : format(
     " AND (%s)",

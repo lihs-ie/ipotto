@@ -10,8 +10,8 @@ use ipo_backend_shared::http::create_health_check_router;
 use crate::{
     infrastructure::DependencyContainer,
     middleware::{
-        email_allowlist_middleware, firebase_auth_middleware, request_logging_middleware,
-        EmailAllowlistConfig, FirebaseTokenVerifier,
+        email_allowlist_middleware, firebase_auth_middleware, rate_limit_middleware,
+        request_logging_middleware, EmailAllowlistConfig, FirebaseTokenVerifier, RateLimitState,
     },
     presentation::handlers,
 };
@@ -27,6 +27,7 @@ pub fn create_router(
     container: DependencyContainer,
     verifier: Option<Arc<FirebaseTokenVerifier>>,
     allowlist: Option<Arc<EmailAllowlistConfig>>,
+    rate_limiter: Option<Arc<RateLimitState>>,
 ) -> Router {
     let authenticated = Router::<DependencyContainer>::new()
         .route("/api/v1/stocks", get(handlers::stock_handlers::list_stocks))
@@ -71,10 +72,16 @@ pub fn create_router(
     // Axum's `route_layer` registers layers in "outside-first" order, so the
     // last one added is the outermost. The intended request pipeline on
     // authenticated routes is:
-    //     firebase_auth → email_allowlist → request_logging → handler
+    //     firebase_auth → email_allowlist → rate_limit → request_logging → handler
     // so we add them in the reverse order: logging first (innermost), then
-    // the allow-list, then the Firebase verifier.
+    // rate-limit, then the allow-list, then the Firebase verifier.
     let authenticated = authenticated.route_layer(from_fn(request_logging_middleware));
+    let authenticated = match rate_limiter {
+        Some(rate_limiter) => {
+            authenticated.route_layer(from_fn_with_state(rate_limiter, rate_limit_middleware))
+        }
+        None => authenticated,
+    };
     let authenticated = match allowlist {
         Some(allowlist) => {
             authenticated.route_layer(from_fn_with_state(allowlist, email_allowlist_middleware))
@@ -296,7 +303,7 @@ mod tests {
             .save(&build_stock())
             .await
             .expect("save stock");
-        let app = create_router(container, None, None);
+        let app = create_router(container, None, None, None);
 
         let response = app
             .oneshot(
@@ -324,6 +331,7 @@ mod tests {
     async fn registers_exclusion_via_http() {
         let app = create_router(
             DependencyContainer::new().await.expect("container"),
+            None,
             None,
             None,
         );
@@ -401,6 +409,7 @@ mod tests {
             )
             .await
             .expect("container"),
+            None,
             None,
             None,
         );
@@ -524,6 +533,7 @@ mod tests {
             .expect("container"),
             None,
             None,
+            None,
         );
 
         let event = ApplicationCompleted {
@@ -629,6 +639,7 @@ mod tests {
             )
             .await
             .expect("container"),
+            None,
             None,
             None,
         );
@@ -755,6 +766,7 @@ mod tests {
             .expect("container"),
             None,
             None,
+            None,
         );
 
         let stock = build_stock();
@@ -861,6 +873,7 @@ mod tests {
             .expect("container"),
             None,
             None,
+            None,
         );
 
         let event = LotteryResultConfirmed {
@@ -962,6 +975,7 @@ mod tests {
             )
             .await
             .expect("container"),
+            None,
             None,
             None,
         );
@@ -1087,6 +1101,7 @@ mod tests {
             .expect("container"),
             None,
             None,
+            None,
         );
 
         let event = LotteryResultConfirmed {
@@ -1169,6 +1184,7 @@ mod tests {
             )
             .await
             .expect("container"),
+            None,
             None,
             None,
         );
@@ -1260,6 +1276,7 @@ mod tests {
             )
             .await
             .expect("container"),
+            None,
             None,
             None,
         );

@@ -42,3 +42,27 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Audit
         run: pnpm audit --audit-level=moderate
+
+  trivy-container-scan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - ipo-api
+          - ipo-applier
+          - ipo-browser
+          - ipo-frontend
+          - ipo-info-fetcher
+          - ipo-result-checker
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build image
+        run: docker build -t ipotto-${{ matrix.service }}:scan -f docker/${{ matrix.service }}/Dockerfile .
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ipotto-${{ matrix.service }}:scan
+          format: table
+          exit-code: 1
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true

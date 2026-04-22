@@ -10,6 +10,32 @@ resource "google_firestore_database" "this" {
   delete_protection_state     = "DELETE_PROTECTION_DISABLED"
 }
 
+resource "google_firebaserules_ruleset" "firestore" {
+  count   = var.firestore_rules_path != null ? 1 : 0
+  provider = google-beta
+
+  project = var.project_id
+  source {
+    files {
+      name    = "firestore.rules"
+      content = file(var.firestore_rules_path)
+    }
+  }
+
+  depends_on = [google_firestore_database.this]
+}
+
+resource "google_firebaserules_release" "firestore" {
+  count   = var.firestore_rules_path != null ? 1 : 0
+  provider = google-beta
+
+  project      = var.project_id
+  name         = "cloud.firestore/${google_firestore_database.this.name}"
+  ruleset_name = google_firebaserules_ruleset.firestore[0].name
+
+  depends_on = [google_firebaserules_ruleset.firestore]
+}
+
 resource "google_firestore_index" "composite" {
   provider = google-beta
 

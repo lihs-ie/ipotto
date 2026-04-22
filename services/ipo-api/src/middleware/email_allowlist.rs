@@ -94,7 +94,14 @@ mod tests {
     use axum::{http::StatusCode, response::IntoResponse};
 
     fn verified_with_email(email: Option<&str>) -> VerifiedToken {
-        VerifiedToken::new("uid-abc", email.map(str::to_string), true, 1_000, 2_000)
+        VerifiedToken::new(
+            "uid-abc",
+            email.map(str::to_string),
+            true,
+            Some("google.com".to_string()),
+            1_000,
+            2_000,
+        )
     }
 
     #[test]

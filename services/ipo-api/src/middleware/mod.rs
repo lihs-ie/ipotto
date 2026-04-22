@@ -4,6 +4,7 @@ mod firebase_error;
 pub(crate) mod firebase_jwk_cache;
 mod firebase_token_verifier;
 mod google_secure_token_fetcher;
+mod rate_limit;
 mod request_logging;
 #[cfg(test)]
 mod test_keypair;
@@ -15,5 +16,6 @@ pub use firebase_error::FirebaseAuthError;
 pub use firebase_jwk_cache::{FirebaseJwkCache, JwksFetcher};
 pub use firebase_token_verifier::{FirebaseAuthConfig, FirebaseTokenVerifier};
 pub use google_secure_token_fetcher::GoogleSecureTokenFetcher;
+pub use rate_limit::{rate_limit_middleware, RateLimitConfig, RateLimitState};
 pub use request_logging::request_logging_middleware;
 pub use verified_token::VerifiedToken;

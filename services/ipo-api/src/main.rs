@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ipo_backend_shared::http::run_http_service;
 
 mod application;
@@ -16,7 +18,15 @@ async fn main() {
     let verifier = config::build_firebase_token_verifier()
         .expect("failed to construct Firebase token verifier");
     let allowlist = config::build_email_allowlist().expect("failed to construct email allow-list");
-    let router = presentation::routes::create_router(container, Some(verifier), Some(allowlist));
+    let rate_limiter = Arc::new(middleware::RateLimitState::new(
+        middleware::RateLimitConfig::default(),
+    ));
+    let router = presentation::routes::create_router(
+        container,
+        Some(verifier),
+        Some(allowlist),
+        Some(rate_limiter),
+    );
     run_http_service(config::HTTP_SERVICE_CONFIG, router)
         .await
         .unwrap_or_else(|error| panic!("failed to run http service: {error}"));
