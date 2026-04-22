@@ -269,7 +269,7 @@ mod tests {
         infrastructure::messaging::PubSubEventEnvelope,
         testing::{
             FirestoreIpoStockRepositoryInMemory, FirestoreOperationLogRepositoryInMemory,
-            PubSubEventPublisher,
+            PubSubEventPublisherInMemory,
         },
     };
 
@@ -354,7 +354,7 @@ mod tests {
     #[tokio::test]
     async fn saves_new_stock_and_publishes_event() {
         let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-info-fetcher"));
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-info-fetcher"));
         let use_case = FetchIpoStocksUseCase::new(
             stock_repository.clone(),
             Arc::new(StaticScraper {
@@ -445,7 +445,7 @@ mod tests {
                     ),
                 ],
             }),
-            Arc::new(PubSubEventPublisher::new("ipo-info-fetcher")),
+            Arc::new(PubSubEventPublisherInMemory::new("ipo-info-fetcher")),
             Arc::new(FirestoreOperationLogRepositoryInMemory::new()),
         );
 

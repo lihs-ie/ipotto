@@ -45,7 +45,7 @@ mod tests {
         testing::{
             FirestoreIpoStockRepositoryInMemory, FirestoreLotteryApplicationRepositoryInMemory,
             FirestoreOperationLogRepositoryInMemory, FirestoreSecuritiesAccountRepositoryInMemory,
-            InMemoryCredentialStore, PubSubEventPublisher,
+            InMemoryCredentialStore, PubSubEventPublisherInMemory,
         },
     };
     use serde_json::Value;
@@ -147,7 +147,7 @@ mod tests {
         ));
         let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
         let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-result-checker"));
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-result-checker"));
 
         let account = build_account();
         let stock = build_stock();
@@ -227,7 +227,7 @@ mod tests {
         ));
         let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
         let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-result-checker"));
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-result-checker"));
 
         let account = build_account();
         let stock = build_stock();
@@ -326,7 +326,7 @@ mod tests {
         ));
         let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
         let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-result-checker"));
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-result-checker"));
 
         let account = build_account();
         let stock = build_stock();

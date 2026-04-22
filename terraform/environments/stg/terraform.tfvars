@@ -37,7 +37,64 @@ cloud_run_services = {
   }
 }
 
-pubsub_topics     = {}
+pubsub_topics = {
+  job_trigger = {
+    name = "ipo-job-trigger"
+    subscriptions = {
+      info_fetch = {
+        name                  = "ipo-info-fetch-sub"
+        ack_deadline_seconds  = 60
+        dead_letter_topic     = "ipo-dead-letter"
+        max_delivery_attempts = 5
+      }
+      apply = {
+        name                  = "ipo-apply-sub"
+        ack_deadline_seconds  = 60
+        dead_letter_topic     = "ipo-dead-letter"
+        max_delivery_attempts = 5
+      }
+      result_check = {
+        name                  = "ipo-result-check-sub"
+        ack_deadline_seconds  = 60
+        dead_letter_topic     = "ipo-dead-letter"
+        max_delivery_attempts = 5
+      }
+    }
+  }
+  info_updated = {
+    name = "ipo-info-updated"
+    subscriptions = {
+      notify = {
+        name                  = "ipo-info-updated-notify-sub"
+        ack_deadline_seconds  = 60
+        dead_letter_topic     = "ipo-dead-letter"
+        max_delivery_attempts = 5
+      }
+    }
+  }
+  result_updated = {
+    name = "ipo-result-updated"
+    subscriptions = {
+      notify = {
+        name                  = "ipo-result-updated-notify-sub"
+        ack_deadline_seconds  = 60
+        dead_letter_topic     = "ipo-dead-letter"
+        max_delivery_attempts = 5
+      }
+    }
+  }
+  notification = {
+    name = "ipo-notification"
+    subscriptions = {
+      fanout = {
+        name                  = "ipo-notification-sub"
+        ack_deadline_seconds  = 60
+        dead_letter_topic     = "ipo-dead-letter"
+        max_delivery_attempts = 5
+      }
+    }
+  }
+}
 scheduler_jobs    = {}
 secret_containers = {}
 

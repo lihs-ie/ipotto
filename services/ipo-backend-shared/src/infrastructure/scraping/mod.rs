@@ -1,5 +1,6 @@
 pub mod external_site_scraper_adapter;
 pub mod fallback_scraper_adapter;
+pub mod html_ipo_scraper_adapter;
 pub mod japanese_date_parser;
 pub mod japanese_shares_parser;
 pub mod japanese_yen_parser;
@@ -8,4 +9,5 @@ pub mod securities_site_scraper_adapter;
 
 pub use external_site_scraper_adapter::ExternalSiteScraperAdapter;
 pub use fallback_scraper_adapter::FallbackScraperAdapter;
+pub use html_ipo_scraper_adapter::HtmlIpoScraperAdapter;
 pub use securities_site_scraper_adapter::SecuritiesSiteScraperAdapter;

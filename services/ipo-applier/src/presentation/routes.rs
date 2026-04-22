@@ -47,7 +47,7 @@ mod tests {
             FirestoreExclusionRepositoryInMemory, FirestoreIpoStockRepositoryInMemory,
             FirestoreLotteryApplicationRepositoryInMemory, FirestoreOperationLogRepositoryInMemory,
             FirestoreSecuritiesAccountRepositoryInMemory, InMemoryCredentialStore,
-            PubSubEventPublisher,
+            PubSubEventPublisherInMemory,
         },
     };
     use serde_json::Value;
@@ -155,7 +155,7 @@ mod tests {
         let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
         let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
         let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-applier"));
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-applier"));
 
         account_repository
             .save(&build_account())
@@ -218,7 +218,7 @@ mod tests {
         let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
         let application_repository = Arc::new(FirestoreLotteryApplicationRepositoryInMemory::new());
         let exclusion_repository = Arc::new(FirestoreExclusionRepositoryInMemory::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-applier"));
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-applier"));
 
         account_repository
             .save(&build_account())

@@ -153,7 +153,7 @@ mod tests {
             FirestoreLotteryApplicationRepositoryInMemory,
             FirestoreNotificationSettingRepositoryInMemory,
             FirestoreOperationLogRepositoryInMemory, FirestoreSecuritiesAccountRepositoryInMemory,
-            InMemoryCredentialStore, PubSubEventPublisher,
+            InMemoryCredentialStore, PubSubEventPublisherInMemory,
         },
     };
     use serde_json::{json, Value};
@@ -975,7 +975,7 @@ mod tests {
             listing_date: stock.schedule().listing_date(),
             updated_at: Utc::now(),
         };
-        let publisher = PubSubEventPublisher::new("ipo-info-fetcher");
+        let publisher = PubSubEventPublisherInMemory::new("ipo-info-fetcher");
         publisher
             .publish(
                 "ipo-info-updated",
@@ -1095,7 +1095,7 @@ mod tests {
             lottery_result: ipo_backend_shared::domain::application::LotteryResult::Won,
             confirmed_at: Utc::now(),
         };
-        let publisher = PubSubEventPublisher::new("ipo-result-checker");
+        let publisher = PubSubEventPublisherInMemory::new("ipo-result-checker");
         publisher
             .publish(
                 "ipo-result-updated",

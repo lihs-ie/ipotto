@@ -12,7 +12,8 @@ use ipo_backend_shared::{
         http_client::{HttpClientConfig, ReqwestClientFactory},
         messaging::PubSubEventPublisher,
         scraping::{
-            ExternalSiteScraperAdapter, FallbackScraperAdapter, SecuritiesSiteScraperAdapter,
+            ExternalSiteScraperAdapter, FallbackScraperAdapter, HtmlIpoScraperAdapter,
+            SecuritiesSiteScraperAdapter,
         },
     },
 };
@@ -32,16 +33,27 @@ impl DependencyContainer {
         let client = ReqwestClientFactory::new(HttpClientConfig::default()).build()?;
         let browser_client =
             BrowserServiceClient::new(client.clone(), config::ipo_browser_base_url());
-        let scraper = FallbackScraperAdapter::new(
-            ExternalSiteScraperAdapter::new(client.clone(), config::external_scraper_base_url()),
+        // Fallback chain: JSON feed → HTML listings → browser scrape.
+        // Each tier is probed in order so a failure of the upstream JSON
+        // API can transparently fall through to the scraped HTML mirror,
+        // and finally to the browser-driven securities-site scrape.
+        let html_then_browser = FallbackScraperAdapter::new(
+            HtmlIpoScraperAdapter::new(client.clone(), config::html_scraper_base_url()),
             SecuritiesSiteScraperAdapter::new(browser_client),
         );
+        let scraper = FallbackScraperAdapter::new(
+            ExternalSiteScraperAdapter::new(client.clone(), config::external_scraper_base_url()),
+            html_then_browser,
+        );
         let db = Arc::new(build_firestore_client(&config::firebase_project_id()).await?);
+        let event_publisher = Arc::new(
+            PubSubEventPublisher::new("ipo-info-fetcher", config::firebase_project_id()).await?,
+        );
 
         Ok(Self {
             stock_repository: Arc::new(FirestoreIpoStockRepository::new(db.clone())),
             scraper: Arc::new(scraper),
-            event_publisher: Arc::new(PubSubEventPublisher::new("ipo-info-fetcher")),
+            event_publisher,
             operation_log_repository: Arc::new(FirestoreOperationLogRepository::new(db)),
         })
     }

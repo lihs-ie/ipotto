@@ -17,7 +17,7 @@ use ipo_backend_shared::{
         },
         http_client::{HttpClientConfig, ReqwestClientFactory},
         messaging::PubSubEventPublisher,
-        secrets::InMemoryCredentialStore,
+        secrets::build_credential_store,
     },
 };
 
@@ -36,9 +36,11 @@ pub struct DependencyContainer {
 impl DependencyContainer {
     pub async fn new() -> Result<Self, DomainError> {
         let client = ReqwestClientFactory::new(HttpClientConfig::default()).build()?;
-        let credential_store: Arc<dyn ipo_backend_shared::acl::secrets::CredentialStorePort> =
-            Arc::new(InMemoryCredentialStore::new());
+        let credential_store = build_credential_store(&config::firebase_project_id()).await?;
         let db = Arc::new(build_firestore_client(&config::firebase_project_id()).await?);
+        let event_publisher = Arc::new(
+            PubSubEventPublisher::new("ipo-result-checker", config::firebase_project_id()).await?,
+        );
         Ok(Self {
             application_repository: Arc::new(FirestoreLotteryApplicationRepository::new(
                 db.clone(),
@@ -52,7 +54,7 @@ impl DependencyContainer {
                 client,
                 config::ipo_browser_base_url(),
             )),
-            event_publisher: Arc::new(PubSubEventPublisher::new("ipo-result-checker")),
+            event_publisher,
             operation_log_repository: Arc::new(FirestoreOperationLogRepository::new(db)),
         })
     }

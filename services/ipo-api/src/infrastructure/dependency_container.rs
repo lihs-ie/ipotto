@@ -26,7 +26,7 @@ use ipo_backend_shared::{
         notification::{
             EmailNotificationAdapter, LineNotificationAdapter, SlackNotificationAdapter,
         },
-        secrets::{sendgrid_api_key_secret_name, InMemoryCredentialStore},
+        secrets::{build_credential_store, sendgrid_api_key_secret_name},
     },
 };
 
@@ -49,14 +49,13 @@ pub struct DependencyContainer {
 impl DependencyContainer {
     pub async fn new() -> Result<Self, DomainError> {
         let client = ReqwestClientFactory::new(HttpClientConfig::default()).build()?;
-        let credential_store = InMemoryCredentialStore::new();
+        let credential_store_port: Arc<dyn CredentialStorePort> =
+            build_credential_store(&config::firebase_project_id()).await?;
         if let Some(sendgrid_api_key) = config::sendgrid_api_key() {
-            credential_store
+            credential_store_port
                 .save(sendgrid_api_key_secret_name(), &sendgrid_api_key)
                 .await?;
         }
-        let credential_store_port: Arc<dyn ipo_backend_shared::acl::secrets::CredentialStorePort> =
-            Arc::new(credential_store.clone());
         let db = Arc::new(build_firestore_client(&config::firebase_project_id()).await?);
 
         let notification_setting_repository =
@@ -69,7 +68,7 @@ impl DependencyContainer {
         )) as Arc<dyn NotificationPort + Send + Sync>;
         let email_adapter = Arc::new(EmailNotificationAdapter::new_with_endpoint(
             client.clone(),
-            credential_store.clone(),
+            credential_store_port.clone(),
             config::notification_from_address(),
             config::sendgrid_endpoint(),
         )) as Arc<dyn NotificationPort + Send + Sync>;

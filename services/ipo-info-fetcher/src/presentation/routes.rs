@@ -32,7 +32,7 @@ mod tests {
         },
         testing::{
             FirestoreIpoStockRepositoryInMemory, FirestoreOperationLogRepositoryInMemory,
-            PubSubEventPublisher,
+            PubSubEventPublisherInMemory,
         },
     };
     use serde_json::Value;
@@ -62,7 +62,7 @@ mod tests {
     #[tokio::test]
     async fn handles_pubsub_fetch_request() {
         let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-info-fetcher"));
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-info-fetcher"));
         let app = create_router(DependencyContainer::from_components(
             stock_repository.clone(),
             Arc::new(StaticScraper {
@@ -162,7 +162,7 @@ mod tests {
             )),
         );
         let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-info-fetcher"));
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-info-fetcher"));
         let app = create_router(DependencyContainer::from_components(
             stock_repository.clone(),
             Arc::new(scraper),
@@ -236,7 +236,7 @@ mod tests {
             )),
         );
         let stock_repository = Arc::new(FirestoreIpoStockRepositoryInMemory::new());
-        let event_publisher = Arc::new(PubSubEventPublisher::new("ipo-info-fetcher"));
+        let event_publisher = Arc::new(PubSubEventPublisherInMemory::new("ipo-info-fetcher"));
         let app = create_router(DependencyContainer::from_components(
             stock_repository.clone(),
             Arc::new(scraper),

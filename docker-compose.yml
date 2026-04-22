@@ -17,6 +17,7 @@ services:
       - SENDGRID_ENDPOINT=http://notification-mock:80/sendgrid/mail/send
       - LINE_NOTIFY_ENDPOINT=http://notification-mock:80/line/api/notify
       - ALLOWED_EMAIL=test@example.com
+      - CREDENTIAL_STORE_BACKEND=in-memory
       - RUST_LOG=info
     depends_on:
       firebase-emulator:
@@ -64,11 +65,15 @@ services:
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
       - IPO_BROWSER_BASE_URL=http://ipo-browser:8081
       - IPO_EXTERNAL_SCRAPER_BASE_URL=http://html-mock-server/ipo-stocks.json
+      - IPO_HTML_SCRAPER_BASE_URL=http://html-mock-server/ipo-listings.html
+      - CREDENTIAL_STORE_BACKEND=in-memory
       - RUST_LOG=info
     depends_on:
       firebase-emulator:
         condition: service_healthy
       pubsub-emulator:
+        condition: service_started
+      html-mock-server:
         condition: service_started
 
   ipo-result-checker:
@@ -82,6 +87,7 @@ services:
       - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
       - IPO_BROWSER_BASE_URL=http://ipo-browser:8081
+      - CREDENTIAL_STORE_BACKEND=in-memory
       - RUST_LOG=info
     depends_on:
       firebase-emulator:
@@ -102,6 +108,7 @@ services:
       - FIRESTORE_EMULATOR_HOST=firebase-emulator:8088
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
       - IPO_BROWSER_BASE_URL=http://ipo-browser:8081
+      - CREDENTIAL_STORE_BACKEND=in-memory
       - RUST_LOG=info
     depends_on:
       firebase-emulator:

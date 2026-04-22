@@ -8,6 +8,6 @@ pub use crate::infrastructure::{
         FirestoreNotificationSettingRepositoryInMemory, FirestoreOperationLogRepositoryInMemory,
         FirestoreSecuritiesAccountRepositoryInMemory,
     },
-    messaging::PubSubEventPublisher,
+    messaging::PubSubEventPublisherInMemory,
     secrets::InMemoryCredentialStore,
 };
