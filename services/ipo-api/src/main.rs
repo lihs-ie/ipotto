@@ -11,6 +11,7 @@ mod presentation;
 #[tokio::main]
 async fn main() {
     let container = infrastructure::DependencyContainer::new()
+        .await
         .expect("failed to construct ipo-api dependency container");
     let verifier = config::build_firebase_token_verifier()
         .expect("failed to construct Firebase token verifier");

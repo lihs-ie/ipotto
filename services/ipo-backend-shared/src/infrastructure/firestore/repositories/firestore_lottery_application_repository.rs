@@ -28,8 +28,9 @@ impl FirestoreLotteryApplicationRepository {
     }
 }
 
+#[async_trait::async_trait]
 impl LotteryApplicationRepository for FirestoreLotteryApplicationRepository {
-    fn find_by_id(
+    async fn find_by_id(
         &self,
         identifier: &ApplicationIdentifier,
     ) -> Result<Option<LotteryApplication>, DomainError> {
@@ -44,7 +45,7 @@ impl LotteryApplicationRepository for FirestoreLotteryApplicationRepository {
             .transpose()
     }
 
-    fn save(&self, application: &LotteryApplication) -> Result<(), DomainError> {
+    async fn save(&self, application: &LotteryApplication) -> Result<(), DomainError> {
         self.documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
@@ -57,7 +58,7 @@ impl LotteryApplicationRepository for FirestoreLotteryApplicationRepository {
         Ok(())
     }
 
-    fn find_by_stock(
+    async fn find_by_stock(
         &self,
         stock: &StockIdentifier,
     ) -> Result<Vec<LotteryApplication>, DomainError> {
@@ -72,7 +73,7 @@ impl LotteryApplicationRepository for FirestoreLotteryApplicationRepository {
             .collect()
     }
 
-    fn find_by_status(
+    async fn find_by_status(
         &self,
         status: ApplicationStatus,
     ) -> Result<Vec<LotteryApplication>, DomainError> {
@@ -87,7 +88,7 @@ impl LotteryApplicationRepository for FirestoreLotteryApplicationRepository {
             .collect()
     }
 
-    fn exists_by_stock_and_account(
+    async fn exists_by_stock_and_account(
         &self,
         stock: &StockIdentifier,
         account: &SecuritiesAccountIdentifier,
@@ -138,8 +139,8 @@ mod tests {
         application
     }
 
-    #[test]
-    fn filters_lottery_applications() {
+    #[tokio::test]
+    async fn filters_lottery_applications() {
         let repository = FirestoreLotteryApplicationRepository::new();
         let stock = StockIdentifier::generate();
         let account = SecuritiesAccountIdentifier::generate();
@@ -147,19 +148,28 @@ mod tests {
         let applied =
             build_application(stock.clone(), SecuritiesAccountIdentifier::generate(), true);
 
-        repository.save(&pending).expect("save pending");
-        repository.save(&applied).expect("save applied");
+        repository.save(&pending).await.expect("save pending");
+        repository.save(&applied).await.expect("save applied");
 
-        assert_eq!(repository.find_by_stock(&stock).expect("by stock").len(), 2);
+        assert_eq!(
+            repository
+                .find_by_stock(&stock)
+                .await
+                .expect("by stock")
+                .len(),
+            2
+        );
         assert_eq!(
             repository
                 .find_by_status(ApplicationStatus::Applied)
+                .await
                 .expect("by status")
                 .len(),
             1
         );
         assert!(repository
             .exists_by_stock_and_account(&stock, &account)
+            .await
             .expect("exists"));
     }
 }

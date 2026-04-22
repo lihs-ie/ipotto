@@ -79,24 +79,26 @@ impl Exclusion {
 }
 
 /// Repository contract for exclusions.
-pub trait ExclusionRepository {
+#[async_trait::async_trait]
+pub trait ExclusionRepository: Send + Sync {
     /// Finds an exclusion by identifier.
-    fn find_by_id(
+    async fn find_by_id(
         &self,
         identifier: &ExclusionIdentifier,
     ) -> Result<Option<Exclusion>, DomainError>;
 
     /// Saves an exclusion aggregate.
-    fn save(&self, exclusion: &Exclusion) -> Result<(), DomainError>;
+    async fn save(&self, exclusion: &Exclusion) -> Result<(), DomainError>;
 
     /// Deletes an exclusion by identifier.
-    fn delete(&self, identifier: &ExclusionIdentifier) -> Result<(), DomainError>;
+    async fn delete(&self, identifier: &ExclusionIdentifier) -> Result<(), DomainError>;
 
     /// Returns all exclusions.
-    fn find_all(&self) -> Result<Vec<Exclusion>, DomainError>;
+    async fn find_all(&self) -> Result<Vec<Exclusion>, DomainError>;
 
     /// Returns whether a company name already exists.
-    fn exists_by_company_name(&self, company_name: &CompanyName) -> Result<bool, DomainError>;
+    async fn exists_by_company_name(&self, company_name: &CompanyName)
+        -> Result<bool, DomainError>;
 }
 
 #[cfg(test)]

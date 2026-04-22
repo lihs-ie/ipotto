@@ -26,14 +26,14 @@ pub async fn list_logs(
     Query(query): Query<ListOperationLogsQuery>,
 ) -> Result<Json<ListOperationLogsOutput>, crate::error::ApiError> {
     Ok(Json(
-        ListOperationLogsUseCase::new(container.operation_log_repository()).execute(
-            ListOperationLogsInput {
+        ListOperationLogsUseCase::new(container.operation_log_repository())
+            .execute(ListOperationLogsInput {
                 start_date: query.start_date,
                 end_date: query.end_date,
                 event_type: query.event_type,
                 cursor: query.cursor,
                 limit: query.limit,
-            },
-        )?,
+            })
+            .await?,
     ))
 }

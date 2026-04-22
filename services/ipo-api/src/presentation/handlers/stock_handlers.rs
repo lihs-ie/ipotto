@@ -23,9 +23,11 @@ pub async fn list_stocks(
     Query(query): Query<ListIpoStocksQuery>,
 ) -> Result<Json<ListIpoStocksOutput>, crate::error::ApiError> {
     Ok(Json(
-        ListIpoStocksUseCase::new(container.stock_repository()).execute(ListIpoStocksInput {
-            status_filter: query.status,
-        })?,
+        ListIpoStocksUseCase::new(container.stock_repository())
+            .execute(ListIpoStocksInput {
+                status_filter: query.status,
+            })
+            .await?,
     ))
 }
 
@@ -41,7 +43,8 @@ pub async fn get_stock(
         )
         .execute(GetIpoStockInput {
             stock_identifier: stock_id,
-        })?,
+        })
+        .await?,
     ))
 }
 
@@ -54,6 +57,7 @@ pub async fn get_dashboard(
             container.application_repository(),
             container.account_repository(),
         )
-        .execute()?,
+        .execute()
+        .await?,
     ))
 }

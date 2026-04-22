@@ -17,7 +17,9 @@ pub async fn list_exclusions(
     State(container): State<DependencyContainer>,
 ) -> Result<Json<crate::application::use_cases::ListExclusionsOutput>, ApiError> {
     Ok(Json(
-        ListExclusionsUseCase::new(container.exclusion_repository()).execute()?,
+        ListExclusionsUseCase::new(container.exclusion_repository())
+            .execute()
+            .await?,
     ))
 }
 
@@ -31,7 +33,9 @@ pub async fn register_exclusion(
     ),
     ApiError,
 > {
-    let output = RegisterExclusionUseCase::new(container.exclusion_repository()).execute(input)?;
+    let output = RegisterExclusionUseCase::new(container.exclusion_repository())
+        .execute(input)
+        .await?;
     Ok((StatusCode::CREATED, Json(output)))
 }
 
@@ -39,6 +43,8 @@ pub async fn remove_exclusion(
     State(container): State<DependencyContainer>,
     Path(exclusion_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
-    RemoveExclusionUseCase::new(container.exclusion_repository()).execute(&exclusion_id)?;
+    RemoveExclusionUseCase::new(container.exclusion_repository())
+        .execute(&exclusion_id)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }

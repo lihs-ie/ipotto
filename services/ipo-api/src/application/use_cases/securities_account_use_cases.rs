@@ -89,7 +89,7 @@ impl RegisterSecuritiesAccountUseCase {
         Self { repository }
     }
 
-    pub fn execute(
+    pub async fn execute(
         &self,
         input: RegisterSecuritiesAccountInput,
     ) -> Result<RegisterSecuritiesAccountOutput, DomainError> {
@@ -105,7 +105,7 @@ impl RegisterSecuritiesAccountUseCase {
                 input.imap_port,
             )?,
         )?;
-        self.repository.save(&account)?;
+        self.repository.save(&account).await?;
         Ok(RegisterSecuritiesAccountOutput {
             identifier: account.identifier().value().to_string(),
             securities_company: account.securities_company().as_str().to_string(),
@@ -122,18 +122,19 @@ impl UpdateSecuritiesAccountUseCase {
         Self { repository }
     }
 
-    pub fn execute(
+    pub async fn execute(
         &self,
         input: UpdateSecuritiesAccountInput,
     ) -> Result<UpdateSecuritiesAccountOutput, DomainError> {
         let identifier = SecuritiesAccountIdentifier::new(input.account_identifier)?;
-        let account =
-            self.repository
-                .find_by_id(&identifier)?
-                .ok_or_else(|| DomainError::NotFound {
-                    resource: "securities_account".to_string(),
-                    identifier: identifier.value().to_string(),
-                })?;
+        let account = self
+            .repository
+            .find_by_id(&identifier)
+            .await?
+            .ok_or_else(|| DomainError::NotFound {
+                resource: "securities_account".to_string(),
+                identifier: identifier.value().to_string(),
+            })?;
 
         let credential = build_credential(
             input
@@ -181,7 +182,7 @@ impl UpdateSecuritiesAccountUseCase {
             account.activation(),
             account.connection_test().cloned(),
         )?;
-        self.repository.save(&updated)?;
+        self.repository.save(&updated).await?;
         Ok(UpdateSecuritiesAccountOutput {
             identifier: identifier.value().to_string(),
         })
@@ -197,15 +198,15 @@ impl DeleteSecuritiesAccountUseCase {
         Self { repository }
     }
 
-    pub fn execute(&self, account_identifier: &str) -> Result<(), DomainError> {
+    pub async fn execute(&self, account_identifier: &str) -> Result<(), DomainError> {
         let identifier = SecuritiesAccountIdentifier::new(account_identifier)?;
-        if self.repository.find_by_id(&identifier)?.is_none() {
+        if self.repository.find_by_id(&identifier).await?.is_none() {
             return Err(DomainError::NotFound {
                 resource: "securities_account".to_string(),
                 identifier: identifier.value().to_string(),
             });
         }
-        self.repository.delete(&identifier)
+        self.repository.delete(&identifier).await
     }
 }
 
@@ -230,20 +231,21 @@ impl TestSecuritiesAccountConnectionUseCase {
         account_identifier: &str,
     ) -> Result<ConnectionTestOutput, DomainError> {
         let identifier = SecuritiesAccountIdentifier::new(account_identifier)?;
-        let mut account =
-            self.repository
-                .find_by_id(&identifier)?
-                .ok_or_else(|| DomainError::NotFound {
-                    resource: "securities_account".to_string(),
-                    identifier: identifier.value().to_string(),
-                })?;
+        let mut account = self
+            .repository
+            .find_by_id(&identifier)
+            .await?
+            .ok_or_else(|| DomainError::NotFound {
+                resource: "securities_account".to_string(),
+                identifier: identifier.value().to_string(),
+            })?;
 
         let result = self
             .browser_port
             .test_connection(account.credential())
             .await?;
         account.record_test_result(result.clone());
-        self.repository.save(&account)?;
+        self.repository.save(&account).await?;
 
         Ok(connection_test_to_output(&result))
     }
@@ -258,8 +260,8 @@ impl ListSecuritiesAccountsUseCase {
         Self { repository }
     }
 
-    pub fn execute(&self) -> Result<ListSecuritiesAccountsOutput, DomainError> {
-        let accounts = self.repository.find_all()?;
+    pub async fn execute(&self) -> Result<ListSecuritiesAccountsOutput, DomainError> {
+        let accounts = self.repository.find_all().await?;
         let items = accounts.iter().map(account_to_output).collect::<Vec<_>>();
         Ok(ListSecuritiesAccountsOutput {
             total_count: items.len(),

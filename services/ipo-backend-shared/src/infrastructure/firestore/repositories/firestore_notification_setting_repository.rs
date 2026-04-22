@@ -26,8 +26,9 @@ impl FirestoreNotificationSettingRepository {
     }
 }
 
+#[async_trait::async_trait]
 impl NotificationSettingRepository for FirestoreNotificationSettingRepository {
-    fn find_by_id(
+    async fn find_by_id(
         &self,
         identifier: &NotificationSettingIdentifier,
     ) -> Result<Option<NotificationSetting>, DomainError> {
@@ -56,7 +57,7 @@ impl NotificationSettingRepository for FirestoreNotificationSettingRepository {
         Ok(Some(parent.to_domain(channels)?))
     }
 
-    fn save(&self, setting: &NotificationSetting) -> Result<(), DomainError> {
+    async fn save(&self, setting: &NotificationSetting) -> Result<(), DomainError> {
         *self
             .parent
             .lock()
@@ -78,8 +79,9 @@ impl NotificationSettingRepository for FirestoreNotificationSettingRepository {
         Ok(())
     }
 
-    fn find_default(&self) -> Result<NotificationSetting, DomainError> {
-        self.find_by_id(&NotificationSettingIdentifier::default_id())?
+    async fn find_default(&self) -> Result<NotificationSetting, DomainError> {
+        self.find_by_id(&NotificationSettingIdentifier::default_id())
+            .await?
             .ok_or_else(|| DomainError::FirestoreMappingError {
                 reason: "default notification setting not found".to_string(),
             })
@@ -120,24 +122,24 @@ mod tests {
         .expect("channel")
     }
 
-    #[test]
-    fn saves_default_setting_and_replaces_channels() {
+    #[tokio::test]
+    async fn saves_default_setting_and_replaces_channels() {
         let repository = FirestoreNotificationSettingRepository::new();
         let mut initial =
             NotificationSetting::create(vec![build_channel(ChannelType::Email)]).expect("setting");
         initial.enable().expect("enable");
-        repository.save(&initial).expect("save initial");
+        repository.save(&initial).await.expect("save initial");
 
-        let found = repository.find_default().expect("find default");
+        let found = repository.find_default().await.expect("find default");
         assert_eq!(found.channels().len(), 1);
         assert_eq!(found.channels()[0].channel_type(), ChannelType::Email);
 
         let mut replaced =
             NotificationSetting::create(vec![build_channel(ChannelType::Slack)]).expect("setting");
         replaced.enable().expect("enable");
-        repository.save(&replaced).expect("save replaced");
+        repository.save(&replaced).await.expect("save replaced");
 
-        let found = repository.find_default().expect("find replaced");
+        let found = repository.find_default().await.expect("find replaced");
         assert_eq!(found.channels().len(), 1);
         assert_eq!(found.channels()[0].channel_type(), ChannelType::Slack);
     }

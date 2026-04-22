@@ -23,8 +23,9 @@ impl FirestoreOperationLogRepository {
     }
 }
 
+#[async_trait::async_trait]
 impl OperationLogRepository for FirestoreOperationLogRepository {
-    fn save(&self, log: &OperationLog) -> Result<(), DomainError> {
+    async fn save(&self, log: &OperationLog) -> Result<(), DomainError> {
         self.documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
@@ -37,7 +38,7 @@ impl OperationLogRepository for FirestoreOperationLogRepository {
         Ok(())
     }
 
-    fn find_all(&self) -> Result<Vec<OperationLog>, DomainError> {
+    async fn find_all(&self) -> Result<Vec<OperationLog>, DomainError> {
         self.documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
@@ -48,23 +49,23 @@ impl OperationLogRepository for FirestoreOperationLogRepository {
             .collect()
     }
 
-    fn find_by_date_range(
+    async fn find_by_date_range(
         &self,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<OperationLog>, DomainError> {
-        self.find_all().map(|logs| {
+        self.find_all().await.map(|logs| {
             logs.into_iter()
                 .filter(|log| log.executed_at() >= start && log.executed_at() <= end)
                 .collect()
         })
     }
 
-    fn find_by_event_type(
+    async fn find_by_event_type(
         &self,
         event_type: OperationEventType,
     ) -> Result<Vec<OperationLog>, DomainError> {
-        self.find_all().map(|logs| {
+        self.find_all().await.map(|logs| {
             logs.into_iter()
                 .filter(|log| log.event_type() == event_type)
                 .collect()
@@ -99,8 +100,8 @@ mod tests {
         .expect("log")
     }
 
-    #[test]
-    fn filters_operation_logs() {
+    #[tokio::test]
+    async fn filters_operation_logs() {
         let repository = FirestoreOperationLogRepository::new();
         let first = build_log(
             OperationEventType::FetchStocks,
@@ -117,12 +118,13 @@ mod tests {
                 .expect("second"),
         );
 
-        repository.save(&first).expect("save first");
-        repository.save(&second).expect("save second");
+        repository.save(&first).await.expect("save first");
+        repository.save(&second).await.expect("save second");
 
         assert_eq!(
             repository
                 .find_by_event_type(OperationEventType::ConnectionTest)
+                .await
                 .expect("by event")
                 .len(),
             1
@@ -137,6 +139,7 @@ mod tests {
                         .single()
                         .expect("end"),
                 )
+                .await
                 .expect("by range")
                 .len(),
             1

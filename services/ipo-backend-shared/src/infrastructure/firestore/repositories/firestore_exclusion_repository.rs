@@ -24,8 +24,9 @@ impl FirestoreExclusionRepository {
     }
 }
 
+#[async_trait::async_trait]
 impl ExclusionRepository for FirestoreExclusionRepository {
-    fn find_by_id(
+    async fn find_by_id(
         &self,
         identifier: &ExclusionIdentifier,
     ) -> Result<Option<Exclusion>, DomainError> {
@@ -40,7 +41,7 @@ impl ExclusionRepository for FirestoreExclusionRepository {
             .transpose()
     }
 
-    fn save(&self, exclusion: &Exclusion) -> Result<(), DomainError> {
+    async fn save(&self, exclusion: &Exclusion) -> Result<(), DomainError> {
         self.documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
@@ -53,7 +54,7 @@ impl ExclusionRepository for FirestoreExclusionRepository {
         Ok(())
     }
 
-    fn delete(&self, identifier: &ExclusionIdentifier) -> Result<(), DomainError> {
+    async fn delete(&self, identifier: &ExclusionIdentifier) -> Result<(), DomainError> {
         self.documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
@@ -63,7 +64,7 @@ impl ExclusionRepository for FirestoreExclusionRepository {
         Ok(())
     }
 
-    fn find_all(&self) -> Result<Vec<Exclusion>, DomainError> {
+    async fn find_all(&self) -> Result<Vec<Exclusion>, DomainError> {
         self.documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
@@ -74,8 +75,11 @@ impl ExclusionRepository for FirestoreExclusionRepository {
             .collect()
     }
 
-    fn exists_by_company_name(&self, company_name: &CompanyName) -> Result<bool, DomainError> {
-        self.find_all().map(|items| {
+    async fn exists_by_company_name(
+        &self,
+        company_name: &CompanyName,
+    ) -> Result<bool, DomainError> {
+        self.find_all().await.map(|items| {
             items
                 .into_iter()
                 .any(|item| item.company_name() == company_name)
@@ -93,8 +97,8 @@ mod tests {
         stock::CompanyName,
     };
 
-    #[test]
-    fn saves_exists_and_deletes_exclusion() {
+    #[tokio::test]
+    async fn saves_exists_and_deletes_exclusion() {
         let repository = FirestoreExclusionRepository::new();
         let company_name = CompanyName::new("テスト株式会社").expect("company");
         let exclusion = Exclusion::create(
@@ -106,12 +110,16 @@ mod tests {
         )
         .expect("exclusion");
 
-        repository.save(&exclusion).expect("save");
+        repository.save(&exclusion).await.expect("save");
         assert!(repository
             .exists_by_company_name(&company_name)
+            .await
             .expect("exists"));
 
-        repository.delete(exclusion.identifier()).expect("delete");
-        assert_eq!(repository.find_all().expect("find all").len(), 0);
+        repository
+            .delete(exclusion.identifier())
+            .await
+            .expect("delete");
+        assert_eq!(repository.find_all().await.expect("find all").len(), 0);
     }
 }

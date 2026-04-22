@@ -103,7 +103,10 @@ mod tests {
         let json: Value = serde_json::from_slice(&body).expect("json");
         assert_eq!(json["fetchedCount"], 1);
         assert_eq!(json["updatedCount"], 0);
-        assert_eq!(stock_repository.find_all().expect("find all").len(), 1);
+        assert_eq!(
+            stock_repository.find_all().await.expect("find all").len(),
+            1
+        );
         assert_eq!(
             event_publisher
                 .published_messages()
@@ -183,9 +186,12 @@ mod tests {
             .expect("body");
         let json: Value = serde_json::from_slice(&body).expect("json");
         assert_eq!(json["fetchedCount"], 1);
-        assert_eq!(stock_repository.find_all().expect("find all").len(), 1);
         assert_eq!(
-            stock_repository.find_all().expect("find all")[0]
+            stock_repository.find_all().await.expect("find all").len(),
+            1
+        );
+        assert_eq!(
+            stock_repository.find_all().await.expect("find all")[0]
                 .company_profile()
                 .company_name()
                 .value(),
@@ -254,7 +260,10 @@ mod tests {
             .expect("body");
         let json: Value = serde_json::from_slice(&body).expect("json");
         assert!(json["error"].as_str().is_some());
-        assert_eq!(stock_repository.find_all().expect("find all").len(), 0);
+        assert_eq!(
+            stock_repository.find_all().await.expect("find all").len(),
+            0
+        );
         assert_eq!(
             event_publisher
                 .published_messages()

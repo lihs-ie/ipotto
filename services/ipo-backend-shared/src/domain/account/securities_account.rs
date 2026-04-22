@@ -97,24 +97,25 @@ impl SecuritiesAccount {
 }
 
 /// Repository contract for securities accounts.
-pub trait SecuritiesAccountRepository {
+#[async_trait::async_trait]
+pub trait SecuritiesAccountRepository: Send + Sync {
     /// Finds an account by identifier.
-    fn find_by_id(
+    async fn find_by_id(
         &self,
         identifier: &SecuritiesAccountIdentifier,
     ) -> Result<Option<SecuritiesAccount>, DomainError>;
 
     /// Saves an account aggregate.
-    fn save(&self, account: &SecuritiesAccount) -> Result<(), DomainError>;
+    async fn save(&self, account: &SecuritiesAccount) -> Result<(), DomainError>;
 
     /// Deletes an account by identifier.
-    fn delete(&self, identifier: &SecuritiesAccountIdentifier) -> Result<(), DomainError>;
+    async fn delete(&self, identifier: &SecuritiesAccountIdentifier) -> Result<(), DomainError>;
 
     /// Returns all accounts.
-    fn find_all(&self) -> Result<Vec<SecuritiesAccount>, DomainError>;
+    async fn find_all(&self) -> Result<Vec<SecuritiesAccount>, DomainError>;
 
     /// Returns all active accounts.
-    fn find_active(&self) -> Result<Vec<SecuritiesAccount>, DomainError>;
+    async fn find_active(&self) -> Result<Vec<SecuritiesAccount>, DomainError>;
 }
 
 #[cfg(test)]

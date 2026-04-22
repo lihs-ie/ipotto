@@ -97,11 +97,12 @@ impl ApplyForLotteryUseCase {
         &self,
         input: ApplyForLotteryInput,
     ) -> Result<ApplyForLotteryOutput, DomainError> {
-        let accounts = self.account_repository.find_active()?;
+        let accounts = self.account_repository.find_active().await?;
         let stocks = self
             .stock_repository
-            .find_in_book_building_period(input.target_date)?;
-        let exclusions = self.exclusion_repository.find_all()?;
+            .find_in_book_building_period(input.target_date)
+            .await?;
+        let exclusions = self.exclusion_repository.find_all().await?;
 
         let mut applied_count = 0_u32;
         let mut skipped_count = 0_u32;
@@ -112,7 +113,8 @@ impl ApplyForLotteryUseCase {
             for stock in &stocks {
                 let already_applied = self
                     .application_repository
-                    .exists_by_stock_and_account(stock.identifier(), account.identifier())?;
+                    .exists_by_stock_and_account(stock.identifier(), account.identifier())
+                    .await?;
 
                 let eligible = ApplicationEligibilityService::is_eligible(
                     stock,
@@ -149,7 +151,8 @@ impl ApplyForLotteryUseCase {
                                 stock.identifier().value()
                             ),
                             Some(error.to_string()),
-                        )?;
+                        )
+                        .await?;
                         results.push(ApplicationResultEntry {
                             stock_identifier: stock.identifier().value().to_string(),
                             securities_account: account.identifier().value().to_string(),
@@ -177,7 +180,7 @@ impl ApplyForLotteryUseCase {
                 match apply_result {
                     Ok(ApplicationResult::Success) => {
                         application.apply()?;
-                        self.application_repository.save(&application)?;
+                        self.application_repository.save(&application).await?;
                         self.publish_application_completed(&application).await;
                         self.record_log(
                             Some(application.identifier().clone()),
@@ -188,7 +191,8 @@ impl ApplyForLotteryUseCase {
                                 application.identifier().value()
                             ),
                             None,
-                        )?;
+                        )
+                        .await?;
                         applied_count += 1;
                         results.push(ApplicationResultEntry {
                             stock_identifier: stock.identifier().value().to_string(),
@@ -210,7 +214,8 @@ impl ApplyForLotteryUseCase {
                                 stock.identifier().value()
                             ),
                             Some("already_applied".to_string()),
-                        )?;
+                        )
+                        .await?;
                         results.push(ApplicationResultEntry {
                             stock_identifier: stock.identifier().value().to_string(),
                             securities_account: account.identifier().value().to_string(),
@@ -228,7 +233,8 @@ impl ApplyForLotteryUseCase {
                             OperationStatus::Failed,
                             format!("insufficient balance for {}", stock.identifier().value()),
                             Some("insufficient_balance".to_string()),
-                        )?;
+                        )
+                        .await?;
                         results.push(ApplicationResultEntry {
                             stock_identifier: stock.identifier().value().to_string(),
                             securities_account: account.identifier().value().to_string(),
@@ -245,7 +251,8 @@ impl ApplyForLotteryUseCase {
                             OperationStatus::Failed,
                             format!("broker reported failure for {}", stock.identifier().value()),
                             Some(reason.clone()),
-                        )?;
+                        )
+                        .await?;
                         results.push(ApplicationResultEntry {
                             stock_identifier: stock.identifier().value().to_string(),
                             securities_account: account.identifier().value().to_string(),
@@ -263,7 +270,8 @@ impl ApplyForLotteryUseCase {
                             OperationStatus::Failed,
                             format!("browser_port error for {}", stock.identifier().value()),
                             Some(error.to_string()),
-                        )?;
+                        )
+                        .await?;
                         results.push(ApplicationResultEntry {
                             stock_identifier: stock.identifier().value().to_string(),
                             securities_account: account.identifier().value().to_string(),
@@ -349,7 +357,7 @@ impl ApplyForLotteryUseCase {
         }
     }
 
-    fn record_log(
+    async fn record_log(
         &self,
         application: Option<ApplicationIdentifier>,
         status: OperationStatus,
@@ -365,7 +373,7 @@ impl ApplyForLotteryUseCase {
             error_message,
             Utc::now(),
         ))?;
-        self.operation_log_repository.save(&log)
+        self.operation_log_repository.save(&log).await
     }
 }
 
@@ -560,8 +568,12 @@ mod tests {
 
         account_repository
             .save(&build_account())
+            .await
             .expect("save account");
-        stock_repository.save(&build_stock()).expect("save stock");
+        stock_repository
+            .save(&build_stock())
+            .await
+            .expect("save stock");
 
         let use_case = ApplyForLotteryUseCase::new(
             application_repository.clone(),
@@ -588,6 +600,7 @@ mod tests {
 
         let saved = application_repository
             .find_by_status(ApplicationStatus::Applied)
+            .await
             .expect("find by status");
         assert_eq!(saved.len(), 1);
 
@@ -610,6 +623,7 @@ mod tests {
 
         account_repository
             .save(&build_account())
+            .await
             .expect("save account");
         // Intentionally do not save any stocks so find_in_book_building_period returns empty.
 
@@ -648,8 +662,12 @@ mod tests {
 
         account_repository
             .save(&build_account())
+            .await
             .expect("save account");
-        stock_repository.save(&build_stock()).expect("save stock");
+        stock_repository
+            .save(&build_stock())
+            .await
+            .expect("save stock");
 
         let use_case = ApplyForLotteryUseCase::new(
             application_repository,

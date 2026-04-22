@@ -24,8 +24,12 @@ impl FirestoreIpoStockRepository {
     }
 }
 
+#[async_trait::async_trait]
 impl IpoStockRepository for FirestoreIpoStockRepository {
-    fn find_by_id(&self, identifier: &StockIdentifier) -> Result<Option<IpoStock>, DomainError> {
+    async fn find_by_id(
+        &self,
+        identifier: &StockIdentifier,
+    ) -> Result<Option<IpoStock>, DomainError> {
         self.documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
@@ -37,7 +41,7 @@ impl IpoStockRepository for FirestoreIpoStockRepository {
             .transpose()
     }
 
-    fn save(&self, stock: &IpoStock) -> Result<(), DomainError> {
+    async fn save(&self, stock: &IpoStock) -> Result<(), DomainError> {
         self.documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
@@ -50,7 +54,7 @@ impl IpoStockRepository for FirestoreIpoStockRepository {
         Ok(())
     }
 
-    fn find_all(&self) -> Result<Vec<IpoStock>, DomainError> {
+    async fn find_all(&self) -> Result<Vec<IpoStock>, DomainError> {
         self.documents
             .lock()
             .map_err(|error| DomainError::FirestoreMappingError {
@@ -61,8 +65,8 @@ impl IpoStockRepository for FirestoreIpoStockRepository {
             .collect()
     }
 
-    fn find_by_status(&self, status: StockStatus) -> Result<Vec<IpoStock>, DomainError> {
-        self.find_all().map(|stocks| {
+    async fn find_by_status(&self, status: StockStatus) -> Result<Vec<IpoStock>, DomainError> {
+        self.find_all().await.map(|stocks| {
             stocks
                 .into_iter()
                 .filter(|stock| stock.status() == status)
@@ -70,8 +74,11 @@ impl IpoStockRepository for FirestoreIpoStockRepository {
         })
     }
 
-    fn find_in_book_building_period(&self, date: NaiveDate) -> Result<Vec<IpoStock>, DomainError> {
-        self.find_all().map(|stocks| {
+    async fn find_in_book_building_period(
+        &self,
+        date: NaiveDate,
+    ) -> Result<Vec<IpoStock>, DomainError> {
+        self.find_all().await.map(|stocks| {
             stocks
                 .into_iter()
                 .filter(|stock| stock.is_in_book_building_period(date))
@@ -127,23 +134,25 @@ mod tests {
         .expect("stock")
     }
 
-    #[test]
-    fn saves_and_filters_stocks() {
+    #[tokio::test]
+    async fn saves_and_filters_stocks() {
         let repository = FirestoreIpoStockRepository::new();
         let eligible = build_stock(StockStatus::Eligible);
         let applied = build_stock(StockStatus::Applied);
 
-        repository.save(&eligible).expect("save eligible");
-        repository.save(&applied).expect("save applied");
+        repository.save(&eligible).await.expect("save eligible");
+        repository.save(&applied).await.expect("save applied");
 
         let found = repository
             .find_by_id(eligible.identifier())
+            .await
             .expect("find by id")
             .expect("stock");
         assert_eq!(found.identifier(), eligible.identifier());
         assert_eq!(
             repository
                 .find_by_status(StockStatus::Eligible)
+                .await
                 .expect("by status")
                 .len(),
             1
@@ -153,6 +162,7 @@ mod tests {
                 .find_in_book_building_period(
                     NaiveDate::from_ymd_opt(2026, 4, 5).expect("within period")
                 )
+                .await
                 .expect("by period")
                 .len(),
             2

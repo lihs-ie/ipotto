@@ -24,7 +24,8 @@ pub async fn get_setting(
 ) -> Result<Json<GetNotificationSettingOutput>, ApiError> {
     Ok(Json(
         GetNotificationSettingUseCase::new(container.notification_setting_repository())
-            .execute()?,
+            .execute()
+            .await?,
     ))
 }
 
@@ -34,7 +35,8 @@ pub async fn update_setting(
 ) -> Result<Json<UpdateNotificationSettingOutput>, ApiError> {
     Ok(Json(
         UpdateNotificationSettingUseCase::new(container.notification_setting_repository())
-            .execute(input)?,
+            .execute(input)
+            .await?,
     ))
 }
 

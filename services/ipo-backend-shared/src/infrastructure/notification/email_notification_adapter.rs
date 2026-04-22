@@ -79,7 +79,10 @@ where
         destination: &ChannelDestination,
     ) -> Result<(), DomainError> {
         self.validate_destination(destination)?;
-        let api_key = self.credential_store.get(sendgrid_api_key_secret_name())?;
+        let api_key = self
+            .credential_store
+            .get(sendgrid_api_key_secret_name())
+            .await?;
         let to = destination.values().get("address").ok_or_else(|| {
             DomainError::InvalidChannelDestination {
                 channel_type: ChannelType::Email.as_str().to_string(),
@@ -169,6 +172,7 @@ mod tests {
         let store = InMemoryCredentialStore::new();
         store
             .save(sendgrid_api_key_secret_name(), "sendgrid-token")
+            .await
             .expect("save api key");
         let mut destination = BTreeMap::new();
         destination.insert("address".to_string(), "notify@example.com".to_string());

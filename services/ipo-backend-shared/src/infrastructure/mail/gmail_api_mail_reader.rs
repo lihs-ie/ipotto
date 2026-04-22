@@ -85,7 +85,8 @@ where
     async fn refresh_access_token(&self) -> Result<String, DomainError> {
         let payload = self
             .credential_store
-            .get(&gmail_oauth_secret_name(&self.account_identifier))?;
+            .get(&gmail_oauth_secret_name(&self.account_identifier))
+            .await?;
         let payload: GmailOauthSecretPayload =
             serde_json::from_str(&payload).map_err(|error| DomainError::SecretPayloadError {
                 reason: error.to_string(),
@@ -335,6 +336,7 @@ mod tests {
                 &gmail_oauth_secret_name(&account_identifier),
                 &serde_json::to_string(&payload).expect("payload"),
             )
+            .await
             .expect("save oauth payload");
 
         Mock::given(method("POST"))

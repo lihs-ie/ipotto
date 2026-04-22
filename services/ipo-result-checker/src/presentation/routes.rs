@@ -162,10 +162,14 @@ mod tests {
         .expect("application");
         application.apply().expect("apply");
 
-        account_repository.save(&account).expect("save account");
-        stock_repository.save(&stock).expect("save stock");
+        account_repository
+            .save(&account)
+            .await
+            .expect("save account");
+        stock_repository.save(&stock).await.expect("save stock");
         application_repository
             .save(&application)
+            .await
             .expect("save application");
 
         let app = create_router(DependencyContainer::from_components(
@@ -197,6 +201,7 @@ mod tests {
         assert_eq!(
             application_repository
                 .find_by_id(application.identifier())
+                .await
                 .expect("find application")
                 .expect("application")
                 .status(),
@@ -252,10 +257,14 @@ mod tests {
             .mount(&browser_server)
             .await;
 
-        account_repository.save(&account).expect("save account");
-        stock_repository.save(&stock).expect("save stock");
+        account_repository
+            .save(&account)
+            .await
+            .expect("save account");
+        stock_repository.save(&stock).await.expect("save stock");
         application_repository
             .save(&application)
+            .await
             .expect("save application");
 
         let app = create_router(DependencyContainer::from_components(
@@ -290,6 +299,7 @@ mod tests {
         assert_eq!(
             application_repository
                 .find_by_id(application.identifier())
+                .await
                 .expect("find application")
                 .expect("application")
                 .status(),
@@ -335,10 +345,14 @@ mod tests {
             .mount(&browser_server)
             .await;
 
-        account_repository.save(&account).expect("save account");
-        stock_repository.save(&stock).expect("save stock");
+        account_repository
+            .save(&account)
+            .await
+            .expect("save account");
+        stock_repository.save(&stock).await.expect("save stock");
         application_repository
             .save(&application)
+            .await
             .expect("save application");
 
         let app = create_router(DependencyContainer::from_components(
@@ -374,6 +388,7 @@ mod tests {
         assert_eq!(
             application_repository
                 .find_by_id(application.identifier())
+                .await
                 .expect("find application")
                 .expect("application")
                 .status(),
