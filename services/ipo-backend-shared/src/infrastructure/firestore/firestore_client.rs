@@ -64,18 +64,32 @@ fn normalize_emulator_host(value: &str) -> String {
     }
 }
 
-/// Token source that hands out a constant dummy bearer token. The
-/// Firestore emulator ignores the token value, so this keeps the
-/// gcloud-sdk auth pipeline happy without needing real GCP credentials.
+/// Token source that hands out a constant **unsigned** JWT
+/// (`alg: none`). The Firestore emulator parses the bearer token as a
+/// JWT and rejects arbitrary opaque strings with `InvalidArgument:
+/// "invalid jwt"`, so the token has to respect the RFC 7519 encoding
+/// even though the emulator does not verify the signature.
+///
+/// Payload: `{"iss":"firebase-emulator","sub":"emulator","aud":"firebase"}`
 #[derive(Debug)]
 struct EmulatorTokenSource;
+
+/// Unsigned JWT accepted by the Firestore emulator. base64url-decoded
+/// parts are:
+/// - header:  `{"alg":"none","typ":"JWT"}`
+/// - payload: `{"iss":"firebase-emulator","sub":"emulator","aud":"firebase"}`
+/// - signature: empty (unsigned)
+const EMULATOR_JWT: &str = concat!(
+    "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.",
+    "eyJpc3MiOiJmaXJlYmFzZS1lbXVsYXRvciIsInN1YiI6ImVtdWxhdG9yIiwiYXVkIjoiZmlyZWJhc2UifQ.",
+);
 
 #[async_trait]
 impl Source for EmulatorTokenSource {
     async fn token(&self) -> gcloud_sdk::error::Result<Token> {
         Ok(Token::new(
             "Bearer".to_string(),
-            gcloud_sdk::SecretValue::new("firestore-emulator-dummy-token".to_string().into_bytes()),
+            gcloud_sdk::SecretValue::new(EMULATOR_JWT.as_bytes().to_vec()),
             Utc::now() + Duration::hours(1),
         ))
     }
