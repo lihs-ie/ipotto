@@ -32,8 +32,8 @@ FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/ipo-frontend/.next/standalone ./
-COPY --from=builder /app/ipo-frontend/.next/static ./.next/static
-COPY --from=builder /app/ipo-frontend/public ./public
+COPY --from=builder /app/ipo-frontend/.next/static ./ipo-frontend/.next/static
+COPY --from=builder /app/ipo-frontend/public ./ipo-frontend/public
 ENV PORT=3000
 EXPOSE 3000
 CMD ["node", "ipo-frontend/server.js"]

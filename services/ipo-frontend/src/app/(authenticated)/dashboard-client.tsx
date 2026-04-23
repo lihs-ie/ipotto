@@ -21,6 +21,10 @@ export const DashboardClient = () => {
       {state.status === "error" && (
         <Typography variant="body">
           読み込みに失敗しました: {state.error.kind}
+          {"status" in state.error && ` (${state.error.status})`}
+          {"message" in state.error && ` ${state.error.message}`}
+          {"body" in state.error &&
+            ` ${state.error.body.error.code}: ${state.error.body.error.message}`}
         </Typography>
       )}
       {state.status === "ok" && <DashboardOverview summary={state.value} />}

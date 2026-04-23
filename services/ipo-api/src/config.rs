@@ -11,6 +11,15 @@ use crate::middleware::{
 
 pub const HTTP_SERVICE_CONFIG: HttpServiceConfig = HttpServiceConfig::new("ipo-api", 8080);
 
+pub fn cors_allowed_origins() -> Vec<String> {
+    env::var("CORS_ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:3000,http://127.0.0.1:3000".to_string())
+        .split(',')
+        .map(|origin| origin.trim().to_string())
+        .filter(|origin| !origin.is_empty())
+        .collect()
+}
+
 pub fn ipo_browser_base_url() -> String {
     env::var("IPO_BROWSER_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".to_string())
 }
