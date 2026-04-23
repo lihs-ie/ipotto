@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
 use axum::{
+    http::{HeaderValue, Method},
     middleware::{from_fn, from_fn_with_state},
     routing::{delete, get, post, put},
     Router,
 };
 use ipo_backend_shared::http::create_health_check_router;
+use tower_http::cors::CorsLayer;
 
 use crate::{
     infrastructure::DependencyContainer,
@@ -28,6 +30,7 @@ pub fn create_router(
     verifier: Option<Arc<FirebaseTokenVerifier>>,
     allowlist: Option<Arc<EmailAllowlistConfig>>,
     rate_limiter: Option<Arc<RateLimitState>>,
+    cors_origins: Vec<String>,
 ) -> Router {
     let authenticated = Router::<DependencyContainer>::new()
         .route("/api/v1/stocks", get(handlers::stock_handlers::list_stocks))
@@ -95,6 +98,28 @@ pub fn create_router(
         None => authenticated,
     };
 
+    let cors = if cors_origins.is_empty() {
+        CorsLayer::permissive()
+    } else {
+        let origins: Vec<HeaderValue> = cors_origins
+            .iter()
+            .filter_map(|origin| origin.parse::<HeaderValue>().ok())
+            .collect();
+        CorsLayer::new()
+            .allow_origin(origins)
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::OPTIONS,
+            ])
+            .allow_headers([
+                axum::http::header::AUTHORIZATION,
+                axum::http::header::CONTENT_TYPE,
+            ])
+    };
+
     Router::<DependencyContainer>::new()
         .merge(create_health_check_router::<DependencyContainer>())
         .merge(authenticated)
@@ -110,6 +135,7 @@ pub fn create_router(
             "/internal/pubsub/ipo-notification",
             post(handlers::notification_handlers::handle_generic_notification),
         )
+        .layer(cors)
         .with_state(container)
 }
 
@@ -303,7 +329,7 @@ mod tests {
             .save(&build_stock())
             .await
             .expect("save stock");
-        let app = create_router(container, None, None, None);
+        let app = create_router(container, None, None, None, vec![]);
 
         let response = app
             .oneshot(
@@ -334,6 +360,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         );
 
         let response = app
@@ -412,6 +439,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         );
 
         let event = ApplicationCompleted {
@@ -534,6 +562,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         );
 
         let event = ApplicationCompleted {
@@ -642,6 +671,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         );
 
         let event = ApplicationCompleted {
@@ -767,6 +797,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         );
 
         let stock = build_stock();
@@ -874,6 +905,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         );
 
         let event = LotteryResultConfirmed {
@@ -978,6 +1010,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         );
 
         let stock = build_stock();
@@ -1102,6 +1135,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         );
 
         let event = LotteryResultConfirmed {
@@ -1187,6 +1221,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         );
 
         let response = app
@@ -1279,6 +1314,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         );
 
         let response = app

@@ -16,7 +16,7 @@ services:
       - SENDGRID_API_KEY=test-sendgrid-key
       - SENDGRID_ENDPOINT=http://notification-mock:80/sendgrid/mail/send
       - LINE_NOTIFY_ENDPOINT=http://notification-mock:80/line/api/notify
-      - ALLOWED_EMAIL=test@example.com
+      - ALLOWED_EMAIL=test@example.com,e2e-test@example.com,lihs.dev@gmail.com
       - CREDENTIAL_STORE_BACKEND=in-memory
       - RUST_LOG=info
     depends_on:
@@ -133,6 +133,7 @@ services:
     ports:
       - "3000:3000"
     environment:
+      - HOSTNAME=0.0.0.0
       - NEXT_PUBLIC_API_URL=http://ipo-api:8080
       - NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
       - NEXT_PUBLIC_FIREBASE_API_KEY=fake-api-key

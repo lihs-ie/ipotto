@@ -26,6 +26,7 @@ async fn main() {
         Some(verifier),
         Some(allowlist),
         Some(rate_limiter),
+        config::cors_allowed_origins(),
     );
     run_http_service(config::HTTP_SERVICE_CONFIG, router)
         .await
