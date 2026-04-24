@@ -10,6 +10,20 @@ locals {
       topic_id = module.pubsub.topic_ids[job.topic_key]
     })
   }
+
+  credential_consumer_env = {
+    IPOTTO_CREDENTIAL_KEK_NAME = module.credential_kms.crypto_key_name
+    KEY_MANAGEMENT_BACKEND     = "google-kms"
+  }
+
+  cloud_run_services_resolved = {
+    for key, service in var.cloud_run_services : key => merge(service, {
+      environment_variables = merge(
+        service.environment_variables,
+        contains(var.credential_kms.encrypter_decrypter_account_keys, service.service_account_key) ? local.credential_consumer_env : {}
+      )
+    })
+  }
 }
 
 resource "google_project_service" "enabled" {
@@ -124,7 +138,7 @@ module "observability" {
 }
 
 module "cloud_run" {
-  for_each = var.cloud_run_services
+  for_each = local.cloud_run_services_resolved
   source   = "../../modules/cloud-run"
 
   project_id                   = var.project_id
@@ -150,5 +164,6 @@ module "cloud_run" {
     module.artifact_registry,
     module.iam,
     module.secret_manager,
+    module.credential_kms,
   ]
 }

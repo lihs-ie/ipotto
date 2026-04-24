@@ -28,6 +28,10 @@ pub fn firebase_project_id() -> String {
     env::var("FIREBASE_PROJECT_ID").unwrap_or_else(|_| "ipotto-local".to_string())
 }
 
+pub fn credential_kek_name() -> String {
+    env::var("IPOTTO_CREDENTIAL_KEK_NAME").unwrap_or_default()
+}
+
 pub fn notification_from_address() -> String {
     env::var("IPO_NOTIFICATION_FROM_ADDRESS").unwrap_or_else(|_| "no-reply@example.com".to_string())
 }

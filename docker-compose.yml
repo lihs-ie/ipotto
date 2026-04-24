@@ -18,6 +18,7 @@ services:
       - LINE_NOTIFY_ENDPOINT=http://notification-mock:80/line/api/notify
       - ALLOWED_EMAIL=test@example.com,e2e-test@example.com,lihs.dev@gmail.com
       - CREDENTIAL_STORE_BACKEND=in-memory
+      - KEY_MANAGEMENT_BACKEND=in-memory
       - RATE_LIMIT_MAX_REQUESTS=10000
       - RATE_LIMIT_WINDOW_SECONDS=60
       - RUST_LOG=info
@@ -69,6 +70,7 @@ services:
       - IPO_EXTERNAL_SCRAPER_BASE_URL=http://html-mock-server/ipo-stocks.json
       - IPO_HTML_SCRAPER_BASE_URL=http://html-mock-server/ipo-listings.html
       - CREDENTIAL_STORE_BACKEND=in-memory
+      - KEY_MANAGEMENT_BACKEND=in-memory
       - RUST_LOG=info
     depends_on:
       firebase-emulator:
@@ -90,6 +92,7 @@ services:
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
       - IPO_BROWSER_BASE_URL=http://ipo-browser:8081
       - CREDENTIAL_STORE_BACKEND=in-memory
+      - KEY_MANAGEMENT_BACKEND=in-memory
       - RUST_LOG=info
     depends_on:
       firebase-emulator:
@@ -111,6 +114,7 @@ services:
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
       - IPO_BROWSER_BASE_URL=http://ipo-browser:8081
       - CREDENTIAL_STORE_BACKEND=in-memory
+      - KEY_MANAGEMENT_BACKEND=in-memory
       - RUST_LOG=info
     depends_on:
       firebase-emulator:
