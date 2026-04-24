@@ -9,6 +9,7 @@ use ipo_backend_shared::{
     },
     errors::DomainError,
     infrastructure::{
+        crypto::{build_key_management, EncryptedCredentialStore},
         firestore::{
             build_firestore_client,
             repositories::{
@@ -39,7 +40,12 @@ pub struct DependencyContainer {
 impl DependencyContainer {
     pub async fn new() -> Result<Self, DomainError> {
         let client = ReqwestClientFactory::new(HttpClientConfig::default()).build()?;
-        let credential_store = build_credential_store(&config::firebase_project_id()).await?;
+        let inner_credential_store = build_credential_store(&config::firebase_project_id()).await?;
+        let key_management = build_key_management(&config::credential_kek_name()).await?;
+        let credential_store = Arc::new(EncryptedCredentialStore::new(
+            inner_credential_store,
+            key_management,
+        ));
         let db = Arc::new(build_firestore_client(&config::firebase_project_id()).await?);
         let event_publisher = Arc::new(
             PubSubEventPublisher::new("ipo-applier", config::firebase_project_id()).await?,

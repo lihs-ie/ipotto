@@ -14,6 +14,7 @@ use ipo_backend_shared::{
     },
     errors::DomainError,
     infrastructure::{
+        crypto::{build_key_management, EncryptedCredentialStore},
         firestore::{
             build_firestore_client,
             repositories::{
@@ -49,8 +50,11 @@ pub struct DependencyContainer {
 impl DependencyContainer {
     pub async fn new() -> Result<Self, DomainError> {
         let client = ReqwestClientFactory::new(HttpClientConfig::default()).build()?;
-        let credential_store_port: Arc<dyn CredentialStorePort> =
-            build_credential_store(&config::firebase_project_id()).await?;
+        let inner_credential_store = build_credential_store(&config::firebase_project_id()).await?;
+        let key_management = build_key_management(&config::credential_kek_name()).await?;
+        let credential_store_port: Arc<dyn CredentialStorePort> = Arc::new(
+            EncryptedCredentialStore::new(inner_credential_store, key_management),
+        );
         if let Some(sendgrid_api_key) = config::sendgrid_api_key() {
             credential_store_port
                 .save(sendgrid_api_key_secret_name(), &sendgrid_api_key)

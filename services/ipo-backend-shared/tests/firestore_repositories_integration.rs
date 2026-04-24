@@ -36,6 +36,7 @@ use ipo_backend_shared::{
         },
     },
     infrastructure::{
+        crypto::{EncryptedCredentialStore, InMemoryKeyManagement},
         firestore::{
             build_firestore_client,
             repositories::{
@@ -212,7 +213,10 @@ async fn firestore_securities_account_repository_roundtrips_account() {
         return;
     }
     let db = new_db().await;
-    let credential_store: Arc<dyn CredentialStorePort> = Arc::new(InMemoryCredentialStore::new());
+    let credential_store: Arc<dyn CredentialStorePort> = Arc::new(EncryptedCredentialStore::new(
+        Arc::new(InMemoryCredentialStore::new()),
+        Arc::new(InMemoryKeyManagement::random_for_test()),
+    ));
     let repository = FirestoreSecuritiesAccountRepository::new(db, credential_store);
     let account = build_account(true);
 
