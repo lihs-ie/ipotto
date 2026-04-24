@@ -57,7 +57,7 @@ type BootstrapProps = {
 /// `app/layout.tsx` can stay a server component and delegate the
 /// client boundary to this file.
 export const ClientProviders = (props: BootstrapProps) => {
-  const config = loadFirebaseConfig();
+  const config = useMemo<FirebaseConfig>(() => loadFirebaseConfig(), []);
   const apiBaseUrl =
     process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
   return (

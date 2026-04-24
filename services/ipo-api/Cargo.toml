@@ -3,6 +3,22 @@ name = "ipo-api"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# Opt-in feature gating the local development seed binary. Excluded
+# from production builds so that `cargo build --release --package ipo-api`
+# (used by the Dockerfile) never pulls the seed binary into the shipped
+# image. Run the seed via `cargo run --features seed --bin seed`.
+seed = []
+
+[[bin]]
+name = "ipo-api"
+path = "src/main.rs"
+
+[[bin]]
+name = "seed"
+path = "src/bin/seed/main.rs"
+required-features = ["seed"]
+
 [dependencies]
 ipo-backend-shared = { path = "../ipo-backend-shared" }
 async-trait = "0.1"

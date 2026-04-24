@@ -86,6 +86,8 @@ make setup                  # 依存インストール + hooks設定 + エミュ
 make help                   # 全コマンド一覧
 make up                     # 全サービス起動（Docker）
 make down                   # 停止
+make seed                   # ローカル Firestore Emulator にテストデータ投入
+make seed-reset             # Firestore を空にしてから seed 投入
 make ci                     # CI全チェック実行（actrun経由）
 make ci-rust                # Rust CIのみ
 make ci-node                # Node.js CIのみ

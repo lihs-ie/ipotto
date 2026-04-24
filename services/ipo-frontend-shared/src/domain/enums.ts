@@ -43,6 +43,20 @@ export const notificationEventTypeSchema = z.enum([
 ]);
 export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 
+/// Activity event types surfaced on the dashboard's recent-activity
+/// feed. Broader than `NotificationEventType` because the feed also
+/// includes intermediate lottery outcomes (補欠 / Alternate) that are
+/// not dispatched as notifications.
+export const dashboardActivityEventTypeSchema = z.enum([
+  "ApplicationCompleted",
+  "LotteryResultWon",
+  "LotteryResultLost",
+  "LotteryResultAlternate",
+]);
+export type DashboardActivityEventType = z.infer<
+  typeof dashboardActivityEventTypeSchema
+>;
+
 export const operationEventTypeSchema = z.enum([
   "fetch_stocks",
   "apply_lottery",

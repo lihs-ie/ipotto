@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { stockIdentifierSchema } from "../domain/identifiers";
 import {
-  notificationEventTypeSchema,
+  dashboardActivityEventTypeSchema,
   stockStatusSchema,
 } from "../domain/enums";
 import { isoDateSchema, isoDateTimeSchema } from "../domain/value-objects";
@@ -11,7 +11,7 @@ export const dashboardRecentActivitySchema = z.object({
   stock: stockIdentifierSchema,
   companyName: z.string(),
   securitiesCompany: z.string(),
-  eventType: notificationEventTypeSchema,
+  eventType: dashboardActivityEventTypeSchema,
   occurredAt: isoDateTimeSchema,
 });
 export type DashboardRecentActivity = z.infer<
