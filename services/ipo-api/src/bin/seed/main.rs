@@ -82,7 +82,9 @@ async fn run() -> Result<(), DomainError> {
     }
     println!("   wrote {} exclusions", exclusions_data.len());
 
-    println!("-- skipping securities accounts (credential store cannot be shared across processes)");
+    println!(
+        "-- skipping securities accounts (credential store cannot be shared across processes)"
+    );
     println!("   register Rakuten account from the UI to exercise connection tests");
 
     println!("-- seeding notification setting (with channels)");

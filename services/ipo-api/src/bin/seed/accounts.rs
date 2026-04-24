@@ -13,9 +13,7 @@
 //! registering a real account from the UI creates a fresh identifier
 //! without affecting the seeded history.
 
-use ipo_backend_shared::{
-    domain::account::SecuritiesAccountIdentifier, errors::DomainError,
-};
+use ipo_backend_shared::{domain::account::SecuritiesAccountIdentifier, errors::DomainError};
 use ulid::Ulid;
 
 pub fn placeholder_account_identifier() -> Result<SecuritiesAccountIdentifier, DomainError> {

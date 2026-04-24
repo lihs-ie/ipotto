@@ -6,9 +6,10 @@ import { expect, test } from "@playwright/test";
 test.describe("Mutation pages bootstrap", () => {
   test("login page remains reachable", async ({ page }) => {
     await page.goto("/login");
-    await expect(
-      page.getByRole("heading", { level: 1 }),
-    ).toContainText("IPOtto");
+    await expect(page.getByText("IPOtto", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      "ようこそ",
+    );
   });
 
   test("api health endpoint is still wired", async ({ request }) => {

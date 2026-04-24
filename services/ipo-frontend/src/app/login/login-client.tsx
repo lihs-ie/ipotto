@@ -43,7 +43,7 @@ export const LoginClient = () => {
         </div>
 
         <div className={styles.card}>
-          <h2 className={styles.heading}>ようこそ</h2>
+          <h1 className={styles.heading}>ようこそ</h1>
           <p className={styles.description}>
             IPO抽選申し込みを自動化し、進捗を一元管理するツール
           </p>
