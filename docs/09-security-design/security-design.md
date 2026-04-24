@@ -153,15 +153,15 @@ sequenceDiagram
 |---|---|---|
 | 通信暗号化 | TLS 1.2+ | Cloud Runが自動的にTLSを終端。HTTP → HTTPS自動リダイレクト |
 | 保存時暗号化（Firestore） | Google管理の暗号鍵 | Firestoreのデフォルト暗号化（AES-256） |
-| 保存時暗号化（Secret Manager） | Google管理の暗号鍵 | Secret Managerのデフォルト暗号化 |
+| 保存時暗号化（Secret Manager） | Google管理の暗号鍵 + アプリ層 envelope 暗号化 | Secret Manager のデフォルト暗号化に加え、アプリ側で AES-256-GCM + Cloud KMS の封筒暗号化を重ねる多層防御。詳細は [credential-encryption.md](../03-detailed-design/credential-encryption.md) |
 | ブラウザセッション（userDataDir） | なし（平文） | Cloud Runのステートレス特性で自然消失。ディレクトリ権限700 |
 
 ### 5.2 機密データ分類と取り扱い
 
 | 分類 | データ | 保管場所 | 取り扱い方針 |
 |---|---|---|---|
-| **最高機密** | 証券口座パスワード、取引暗証番号 | Secret Manager | Secret Managerで暗号化保存。メモリ上の保持時間を最小化。ログ出力絶対禁止 |
-| **最高機密** | メール認証情報（パスワード） | Secret Manager | AccountCredentialの一部としてSecret Managerで管理。ログ出力絶対禁止 |
+| **最高機密** | 証券口座パスワード、取引暗証番号 | Secret Manager（アプリ層 envelope 暗号化済み） | AES-256-GCM + Cloud KMS wrapped DEK で暗号化した上で Secret Manager に保存。メモリ上の保持時間を最小化。DEK は `zeroize::Zeroizing` で Drop 時にクリア。ログ出力絶対禁止 |
+| **最高機密** | メール認証情報（パスワード） | Secret Manager（アプリ層 envelope 暗号化済み） | AccountCredential の一部として envelope 暗号化済みバンドルで保存。ログ出力絶対禁止 |
 | **機密** | 証券口座ログインID | Secret Manager | Secret Manager内に保存。APIレスポンスではマスク表示（先頭3文字 + `***`） |
 | **機密** | メールアドレス | Secret Manager | Secret Manager内に保存。APIレスポンスではマスク表示 |
 | **機密** | ブラウザセッション（Cookie） | Cloud Run ローカル `/tmp/` | Cloud Runインスタンス終了時に自動消失。ディレクトリ権限700 |
@@ -175,53 +175,79 @@ sequenceDiagram
 graph TD
     subgraph ServiceAccounts["GCPサービスアカウント"]
         ApiSA["ipo-api-sa"]
+        ApplierSA["ipo-applier-sa"]
+        CheckerSA["ipo-result-checker-sa"]
         BrowserSA["ipo-browser-sa"]
         FetcherSA["ipo-info-fetcher-sa"]
-        CheckerSA["ipo-result-checker-sa"]
+    end
+
+    subgraph KMS["Cloud KMS"]
+        Kek["ipo-credential-kek<br>（KEK, 90日自動ローテーション）"]
     end
 
     subgraph SecretManager["Secret Manager"]
-        AccountSecrets["ipo-account-{id}<br>証券口座機密情報"]
+        AccountSecrets["ipo-account-{id}<br>envelope 暗号化バンドル"]
         LineToken["ipo-line-token"]
         SendGridKey["ipo-sendgrid-api-key"]
         SlackWebhook["ipo-slack-webhook-url"]
     end
 
-    ApiSA -->|accessor| AccountSecrets
-    ApiSA -->|accessor| LineToken
-    ApiSA -->|accessor| SendGridKey
-    ApiSA -->|accessor| SlackWebhook
-    BrowserSA -->|accessor| AccountSecrets
+    ApiSA -->|secretAccessor| AccountSecrets
+    ApiSA -->|cryptoKeyEncrypterDecrypter| Kek
+    ApiSA -->|secretAccessor| LineToken
+    ApiSA -->|secretAccessor| SendGridKey
+    ApiSA -->|secretAccessor| SlackWebhook
+    ApplierSA -->|secretAccessor| AccountSecrets
+    ApplierSA -->|cryptoKeyEncrypterDecrypter| Kek
+    CheckerSA -->|secretAccessor| AccountSecrets
+    CheckerSA -->|cryptoKeyEncrypterDecrypter| Kek
+    BrowserSA -.-x AccountSecrets
     FetcherSA -.-x AccountSecrets
-    CheckerSA -.-x AccountSecrets
 
+    style BrowserSA fill:#fee,stroke:#f00
     style FetcherSA fill:#fee,stroke:#f00
-    style CheckerSA fill:#fee,stroke:#f00
 ```
 
-> **最小権限の原則:** ipo-info-fetcherとipo-result-checkerは証券口座の機密情報にアクセスする必要がない。Secret Managerへのアクセス権限を付与しない。
+> **最小権限の原則:** 証券口座クレデンシャルを読む必要があるのは `ipo-api`（登録・更新・接続テスト）、`ipo-applier`（抽選申込実行）、`ipo-result-checker`（結果確認ログイン）の 3 サービスのみ。これら 3 SA にだけ `secretAccessor` と `cloudkms.cryptoKeyEncrypterDecrypter` を付与する。`ipo-browser` は `ipo-api` が復号した上で HTTP 経由で平文を受け取る構成なので、Secret Manager / KMS への直接アクセス権は不要。`ipo-info-fetcher` は IPO 銘柄スクレイピング専用で、クレデンシャルにアクセスする必要がない。
 
 ### 5.4 機密情報のライフサイクル
 
 ```mermaid
 flowchart TD
-    Create([口座登録]) --> Encrypt[Secret Managerに暗号化保存]
-    Encrypt --> Store[Firestoreに参照キーのみ保存]
+    Create([口座登録]) --> GenDek["DEK 生成（32 byte, OsRng）"]
+    GenDek --> WrapDek[Cloud KMS Encrypt で DEK を wrap]
+    WrapDek --> AesGcm["AES-256-GCM で payload を暗号化<br>AAD = secret key 名"]
+    AesGcm --> Bundle["envelope bundle JSON 化<br>{version, wrapped_dek, nonce, ciphertext}"]
+    Bundle --> StoreSecret[Secret Manager に保存]
+    StoreSecret --> StoreRef[Firestore に参照キーのみ保存]
 
     subgraph Usage["利用時"]
-        Retrieve[Secret Managerから取得] --> Decrypt[復号（自動）]
-        Decrypt --> UseInMemory[メモリ上で使用]
-        UseInMemory --> Clear[使用後にメモリからクリア]
+        Fetch[Secret Manager から bundle 取得] --> Parse[JSON parse + version 検証]
+        Parse --> UnwrapDek[Cloud KMS Decrypt で DEK を unwrap]
+        UnwrapDek --> AesDecrypt[AES-256-GCM で復号 + AAD 検証]
+        AesDecrypt --> UseInMemory[メモリ上で使用]
+        UseInMemory --> Clear["Zeroizing で DEK / plaintext を消去"]
     end
 
-    Store --> Retrieve
+    StoreRef --> Fetch
 
-    Update([口座更新]) --> NewVersion[Secret Manager新バージョン作成]
+    Update([口座更新]) --> NewBundle[新しい DEK + nonce で新 bundle を生成]
+    NewBundle --> NewVersion[Secret Manager 新バージョン作成]
     NewVersion --> DisableOld[旧バージョンを無効化]
 
-    Delete([口座削除]) --> DeleteSecret[Secret Managerからシークレット削除]
-    DeleteSecret --> DeleteFirestore[Firestoreからドキュメント削除]
+    Delete([口座削除]) --> DeleteSecret[Secret Manager からシークレット削除]
+    DeleteSecret --> DeleteFirestore[Firestore からドキュメント削除]
 ```
+
+### 5.5 Envelope 暗号化
+
+- **KEK**: Cloud KMS の CryptoKey `projects/{proj}/locations/asia-northeast1/keyRings/ipo-credential-kr/cryptoKeys/ipo-credential-kek`
+  - purpose: `ENCRYPT_DECRYPT`、rotation_period: 90 日、`prevent_destroy = true`
+- **DEK**: 32 byte ランダム（`OsRng`）。save 毎に発行、KEK で wrap して Secret Manager に同梱。メモリ上は `zeroize::Zeroizing` で保持し Drop 時にクリア
+- **AEAD**: AES-256-GCM、12 byte nonce（save 毎に `OsRng` 生成）、AAD = secret key 名（ciphertext の別 key への付け替え攻撃を検知）
+- **バンドル形式**: `{version: 1, wrapped_dek, nonce, ciphertext}`（すべて base64url）。未知 version は即エラー（silent downgrade を防止）
+- **実装**: `services/ipo-backend-shared/src/infrastructure/crypto/` の `EncryptedCredentialStore` / `GoogleKmsKeyManagement`。詳細は [detailed-design/credential-encryption.md](../03-detailed-design/credential-encryption.md)
+- **ローカル開発**: `KEY_MANAGEMENT_BACKEND=in-memory` + `CREDENTIAL_STORE_BACKEND=in-memory` で `InMemoryKeyManagement` + `InMemoryCredentialStore` を使う。docker-compose のデフォルトも同じ
 
 ## 6. セキュリティ対策
 

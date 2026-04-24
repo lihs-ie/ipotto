@@ -8,7 +8,7 @@ IPOtto - 個人投資家向けIPO抽選申し込み自動化・管理Webアプ�
 
 ## アーキテクチャ
 
-マイクロサービス構成（5サービス）、GCP Cloud Run上で稼働。サービス間連携はGoogle Cloud Pub/Subによるイベント駆動。
+マイクロサービス構成（6サービス）、GCP Cloud Run上で稼働。サービス間連携はGoogle Cloud Pub/Subによるイベント駆動。
 
 | サービス | 技術 | 役割 |
 |----------|------|------|
@@ -17,6 +17,7 @@ IPOtto - 個人投資家向けIPO抽選申し込み自動化・管理Webアプ�
 | ipo-browser | Node.js / Playwright | 楽天証券Webサイト自動操作（2FA対応含む） |
 | ipo-info-fetcher | Rust | IPO情報スクレイピング |
 | ipo-result-checker | Rust | 抽選結果確認・通知 |
+| ipo-applier | Rust | 抽選申込の自動実行（Pub/Sub駆動） |
 
 データストア: Firebase Firestore、認証: Firebase Authentication、スケジューリング: Cloud Scheduler → Pub/Sub
 
@@ -68,6 +69,7 @@ services/
 ├── ipo-api/                # REST API (Rust/Axum, port 8080)
 ├── ipo-info-fetcher/       # IPO情報スクレイピング (Rust, port 8082)
 ├── ipo-result-checker/     # 抽選結果確認 (Rust, port 8083)
+├── ipo-applier/            # 抽選申込の自動実行 (Rust, port 8084)
 ├── ipo-frontend-shared/    # フロントエンド共通ドメインモデル (@ipotto/shared)
 ├── ipo-browser/            # ブラウザ自動化 (Node.js/Playwright, port 8081)
 └── ipo-frontend/           # ダッシュボードUI (Next.js 16, port 3000)
@@ -158,8 +160,11 @@ GitHub Actionsワークフロー:
 
 ## セキュリティ上の注意点
 
-- 証券口座の認証情報はGCP Secret Managerで暗号化管理（AES-256）
-- メモリ上の認証情報は最小限の保持時間とする
+- 証券口座の認証情報はアプリ層で envelope 暗号化（AES-256-GCM + Cloud KMS wrapped DEK）を施した上で GCP Secret Manager に保存する（多層防御）
+  - 実装: `services/ipo-backend-shared/src/infrastructure/crypto/` の `EncryptedCredentialStore` / `GoogleKmsKeyManagement`
+  - ローカル開発は `KEY_MANAGEMENT_BACKEND=in-memory` で `InMemoryKeyManagement` を使用（KMS への疎通不要）
+  - KEK は Terraform `modules/kms/` で作成、90 日自動ローテーション
+- メモリ上の認証情報は最小限の保持時間とする。DEK は `zeroize::Zeroizing` で Drop 時に確実にクリア
 - 2FA対応: 楽天証券の画像認証はメール経由でキーワード抽出→画像alt属性マッチング
 - ブラウザ自動操作はレート制限を設けてbot検知を回避
 - 許可メールアドレスのホワイトリストによるアクセス制御
