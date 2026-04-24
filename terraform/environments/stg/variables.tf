@@ -19,12 +19,24 @@ variable "enabled_apis" {
   default = [
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
+    "cloudkms.googleapis.com",
     "iam.googleapis.com",
     "logging.googleapis.com",
     "monitoring.googleapis.com",
     "run.googleapis.com",
     "secretmanager.googleapis.com",
   ]
+}
+
+variable "credential_kms" {
+  description = "Secret Manager に保存する証券口座クレデンシャルを envelope 暗号化するための KMS 設定。"
+  type = object({
+    location                         = string
+    key_ring_name                    = string
+    crypto_key_name                  = string
+    rotation_period                  = optional(string, "7776000s")
+    encrypter_decrypter_account_keys = set(string)
+  })
 }
 
 variable "artifact_registry" {
