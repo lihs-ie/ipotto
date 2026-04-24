@@ -21,7 +21,10 @@ firestore = "0.48"
 futures = "0.3"
 gcloud-googleapis = { version = "1.3", features = ["pubsub"] }
 gcloud-pubsub = "1.7"
-gcloud-sdk = { version = "0.29", features = ["google-cloud-secretmanager-v1"] }
+gcloud-sdk = { version = "0.29", features = [
+    "google-cloud-kms-v1",
+    "google-cloud-secretmanager-v1",
+] }
 rand = "0.8"
 regex = "1"
 reqwest = { version = "0.13", default-features = false, features = ["form", "json", "query", "rustls"] }
