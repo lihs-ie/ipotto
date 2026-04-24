@@ -8,11 +8,11 @@ describe("Sidebar", () => {
     render(<Sidebar currentPath="/" />);
     for (const label of [
       "ダッシュボード",
-      "銘柄一覧",
-      "操作ログ",
+      "IPO銘柄",
       "除外リスト",
       "通知設定",
       "証券口座",
+      "操作ログ",
     ]) {
       expect(screen.getByRole("link", { name: label })).toBeDefined();
     }
@@ -26,7 +26,7 @@ describe("Sidebar", () => {
 
   it("marks the stocks link as active on /stocks/{id} routes too", () => {
     render(<Sidebar currentPath="/stocks/abc_123" />);
-    const link = screen.getByRole("link", { name: "銘柄一覧" });
+    const link = screen.getByRole("link", { name: "IPO銘柄" });
     expect(link.getAttribute("data-active")).toBe("true");
   });
 

@@ -1,29 +1,96 @@
 .container {
   display: inline-flex;
   align-items: center;
-  padding: 0.125rem 0.625rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.25rem;
 }
 
+/* Tone-based fallbacks (dark theme) */
 .container[data-tone="neutral"] {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--s-fetched-soft);
+  color: #CBD5E1;
 }
 
 .container[data-tone="success"] {
-  background-color: #dcfce7;
-  color: #15803d;
+  background-color: var(--s-won-soft);
+  color: #6EE7B7;
 }
 
 .container[data-tone="warning"] {
-  background-color: #fef3c7;
-  color: #b45309;
+  background-color: var(--s-alt-soft);
+  color: #FCD34D;
 }
 
 .container[data-tone="danger"] {
-  background-color: #fee2e2;
-  color: #b91c1c;
+  background-color: var(--s-error-soft);
+  color: #FCA5A5;
+}
+
+/* Per-status overrides */
+.container[data-status="Fetched"] {
+  background-color: var(--s-fetched-soft);
+  color: #CBD5E1;
+}
+
+.container[data-status="Eligible"] {
+  background-color: var(--s-fetched-soft);
+  color: #CBD5E1;
+}
+
+.container[data-status="Applied"] {
+  background-color: var(--s-applied-soft);
+  color: #93C5FD;
+}
+
+.container[data-status="ResultChecked"] {
+  background-color: var(--s-applied-soft);
+  color: #93C5FD;
+}
+
+.container[data-status="Won"] {
+  background-color: var(--s-won-soft);
+  color: #6EE7B7;
+}
+
+.container[data-status="Purchased"] {
+  background-color: var(--s-won-soft);
+  color: #6EE7B7;
+}
+
+.container[data-status="Sold"] {
+  background-color: var(--s-won-soft);
+  color: #6EE7B7;
+}
+
+.container[data-status="Lost"] {
+  background-color: var(--s-lost-soft);
+  color: #9CA3AF;
+}
+
+.container[data-status="Alternate"] {
+  background-color: var(--s-alt-soft);
+  color: #FCD34D;
+}
+
+.container[data-status="Pending"] {
+  background-color: var(--s-alt-soft);
+  color: #FCD34D;
+}
+
+.container[data-status="Failed"] {
+  background-color: var(--s-error-soft);
+  color: #FCA5A5;
+}
+
+.container[data-status="Declined"] {
+  background-color: var(--s-error-soft);
+  color: #FCA5A5;
+}
+
+.container[data-status="Excluded"] {
+  background-color: var(--s-excl-soft);
+  color: #C4B5FD;
 }

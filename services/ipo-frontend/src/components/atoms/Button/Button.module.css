@@ -2,32 +2,52 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem 1.25rem;
-  border-radius: 0.375rem;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
-  font-size: 0.95rem;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   transition: background-color 0.15s ease-in-out;
 }
 
 .container[data-variant="primary"] {
-  background-color: #2563eb;
-  color: #fff;
+  background-color: var(--primary);
+  color: #0A1120;
 }
 
 .container[data-variant="primary"]:hover:not(:disabled) {
-  background-color: #1d4ed8;
+  background-color: var(--primary-hover);
 }
 
 .container[data-variant="secondary"] {
   background-color: transparent;
-  color: #2563eb;
-  border-color: #2563eb;
+  color: var(--text);
+  border-color: var(--border);
 }
 
 .container[data-variant="secondary"]:hover:not(:disabled) {
-  background-color: #eff6ff;
+  background-color: var(--surface-2);
+}
+
+.container[data-variant="ghost"] {
+  background-color: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.container[data-variant="ghost"]:hover:not(:disabled) {
+  background-color: var(--surface-2);
+}
+
+.container[data-variant="danger"] {
+  background-color: transparent;
+  color: var(--s-error);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.container[data-variant="danger"]:hover:not(:disabled) {
+  background-color: rgba(239, 68, 68, 0.1);
 }
 
 .container:disabled {

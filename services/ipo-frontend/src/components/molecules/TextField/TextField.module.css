@@ -8,14 +8,14 @@
 .label {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-2);
 }
 
 .required {
   margin-left: 0.25rem;
-  color: #b91c1c;
+  color: var(--s-error);
 }
 
 .error {
-  color: #b91c1c;
+  color: var(--s-error);
 }
