@@ -6,6 +6,17 @@ artifact_registry = {
   repository_id = "ipotto"
 }
 
+credential_kms = {
+  location        = "asia-northeast1"
+  key_ring_name   = "ipo-credential-kr"
+  crypto_key_name = "ipo-credential-kek"
+  encrypter_decrypter_account_keys = [
+    "api",
+    "applier",
+    "result_checker",
+  ]
+}
+
 service_accounts = {
   frontend = {
     account_id   = "ipo-frontend"

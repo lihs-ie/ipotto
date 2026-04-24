@@ -19,3 +19,8 @@ output "firestore_database_name" {
   description = "Firestore データベース名。"
   value       = var.enable_firestore ? module.firestore[0].database_name : null
 }
+
+output "credential_kek_name" {
+  description = "証券口座クレデンシャル envelope 暗号化用 KEK のフルリソース名。Cloud Run に IPOTTO_CREDENTIAL_KEK_NAME として配線する。"
+  value       = module.credential_kms.crypto_key_name
+}

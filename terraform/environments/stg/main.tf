@@ -53,6 +53,27 @@ module "secret_manager" {
   depends_on = [google_project_service.enabled]
 }
 
+module "credential_kms" {
+  source = "../../modules/kms"
+
+  project_id      = var.project_id
+  location        = var.credential_kms.location
+  key_ring_name   = var.credential_kms.key_ring_name
+  crypto_key_name = var.credential_kms.crypto_key_name
+  rotation_period = var.credential_kms.rotation_period
+  labels          = local.common_labels
+
+  encrypter_decrypter_members = [
+    for key in var.credential_kms.encrypter_decrypter_account_keys :
+    "serviceAccount:${module.iam.service_account_emails[key]}"
+  ]
+
+  depends_on = [
+    google_project_service.enabled,
+    module.iam,
+  ]
+}
+
 module "pubsub" {
   source = "../../modules/pubsub"
 
@@ -76,14 +97,14 @@ module "firestore" {
   count  = var.enable_firestore ? 1 : 0
   source = "../../modules/firestore"
 
-  project_id            = var.project_id
-  location_id           = var.firestore.location_id
-  database_name         = var.firestore.database_name
-  database_type         = var.firestore.database_type
-  concurrency_mode      = var.firestore.concurrency_mode
-  composite_indexes     = var.firestore.composite_indexes
-  firestore_rules_path   = "${path.module}/../../../firestore.rules"
-  backup_daily_retention = "259200s"
+  project_id              = var.project_id
+  location_id             = var.firestore.location_id
+  database_name           = var.firestore.database_name
+  database_type           = var.firestore.database_type
+  concurrency_mode        = var.firestore.concurrency_mode
+  composite_indexes       = var.firestore.composite_indexes
+  firestore_rules_path    = "${path.module}/../../../firestore.rules"
+  backup_daily_retention  = "259200s"
   backup_weekly_retention = "604800s"
 
   depends_on = [google_project_service.enabled]
