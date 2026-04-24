@@ -12,6 +12,7 @@ edition = "2021"
 test-support = []
 
 [dependencies]
+aes-gcm = "0.10"
 async-trait = "0.1"
 axum = "0.8"
 base64 = "0.22"
@@ -34,6 +35,7 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 ulid = { version = "1", features = ["serde"] }
 url = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
 
 [dev-dependencies]
 tempfile = "3"

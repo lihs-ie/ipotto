@@ -87,6 +87,12 @@ pub enum DomainError {
     #[error("secret payload error: {reason}")]
     SecretPayloadError { reason: String },
 
+    #[error("key management error: {reason}")]
+    KeyManagementError { reason: String },
+
+    #[error("envelope decryption error: {reason}")]
+    EnvelopeDecryptionError { reason: String },
+
     #[error("http client error: {reason}")]
     HttpClientError { reason: String },
 
