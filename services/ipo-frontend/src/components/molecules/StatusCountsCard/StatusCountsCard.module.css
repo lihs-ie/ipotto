@@ -1,0 +1,29 @@
+.container {
+  padding: 1rem;
+  background-color: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--bg-deep);
+  border-radius: var(--radius-sm);
+}
+
+.count {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text);
+}

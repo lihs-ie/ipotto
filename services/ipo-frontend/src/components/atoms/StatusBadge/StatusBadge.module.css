@@ -1,0 +1,96 @@
+.container {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+/* Tone-based fallbacks (dark theme) */
+.container[data-tone="neutral"] {
+  background-color: var(--s-fetched-soft);
+  color: #CBD5E1;
+}
+
+.container[data-tone="success"] {
+  background-color: var(--s-won-soft);
+  color: #6EE7B7;
+}
+
+.container[data-tone="warning"] {
+  background-color: var(--s-alt-soft);
+  color: #FCD34D;
+}
+
+.container[data-tone="danger"] {
+  background-color: var(--s-error-soft);
+  color: #FCA5A5;
+}
+
+/* Per-status overrides */
+.container[data-status="Fetched"] {
+  background-color: var(--s-fetched-soft);
+  color: #CBD5E1;
+}
+
+.container[data-status="Eligible"] {
+  background-color: var(--s-fetched-soft);
+  color: #CBD5E1;
+}
+
+.container[data-status="Applied"] {
+  background-color: var(--s-applied-soft);
+  color: #93C5FD;
+}
+
+.container[data-status="ResultChecked"] {
+  background-color: var(--s-applied-soft);
+  color: #93C5FD;
+}
+
+.container[data-status="Won"] {
+  background-color: var(--s-won-soft);
+  color: #6EE7B7;
+}
+
+.container[data-status="Purchased"] {
+  background-color: var(--s-won-soft);
+  color: #6EE7B7;
+}
+
+.container[data-status="Sold"] {
+  background-color: var(--s-won-soft);
+  color: #6EE7B7;
+}
+
+.container[data-status="Lost"] {
+  background-color: var(--s-lost-soft);
+  color: #9CA3AF;
+}
+
+.container[data-status="Alternate"] {
+  background-color: var(--s-alt-soft);
+  color: #FCD34D;
+}
+
+.container[data-status="Pending"] {
+  background-color: var(--s-alt-soft);
+  color: #FCD34D;
+}
+
+.container[data-status="Failed"] {
+  background-color: var(--s-error-soft);
+  color: #FCA5A5;
+}
+
+.container[data-status="Declined"] {
+  background-color: var(--s-error-soft);
+  color: #FCA5A5;
+}
+
+.container[data-status="Excluded"] {
+  background-color: var(--s-excl-soft);
+  color: #C4B5FD;
+}

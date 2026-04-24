@@ -1,0 +1,68 @@
+name: Security Scan
+
+on:
+  schedule:
+    - cron: "0 15 * * 0"
+  workflow_dispatch:
+
+jobs:
+  rust-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      - name: Audit
+        run: cargo audit
+
+  node-audit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [ipo-browser, ipo-frontend]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: services/${{ matrix.service }}/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: services/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: services
+        run: pnpm install --frozen-lockfile
+      - name: Audit
+        run: pnpm audit --audit-level=moderate
+
+  trivy-container-scan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - ipo-api
+          - ipo-applier
+          - ipo-browser
+          - ipo-frontend
+          - ipo-info-fetcher
+          - ipo-result-checker
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build image
+        run: docker build -t ipotto-${{ matrix.service }}:scan -f docker/${{ matrix.service }}/Dockerfile .
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ipotto-${{ matrix.service }}:scan
+          format: table
+          exit-code: 1
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true

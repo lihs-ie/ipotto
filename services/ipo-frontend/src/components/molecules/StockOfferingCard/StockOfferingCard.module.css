@@ -1,0 +1,35 @@
+.container {
+  padding: 1rem;
+  background-color: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
+}
+
+.grid {
+  margin: 0.75rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.5rem;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--bg-deep);
+  border-radius: var(--radius-sm);
+}
+
+.row dt {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-3);
+}
+
+.row dd {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text);
+  font-weight: 600;
+}

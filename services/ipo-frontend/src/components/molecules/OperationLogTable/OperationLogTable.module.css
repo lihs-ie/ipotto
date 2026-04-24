@@ -1,0 +1,36 @@
+.container {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+}
+
+.container thead {
+  background-color: var(--bg-deep);
+}
+
+.container th,
+.container td {
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.container td[data-status="succeeded"] {
+  color: var(--s-won);
+  font-weight: 600;
+}
+
+.container td[data-status="failed"] {
+  color: var(--s-error);
+  font-weight: 600;
+}
+
+.empty {
+  text-align: center;
+  color: var(--text-3);
+  padding: 1.5rem;
+}

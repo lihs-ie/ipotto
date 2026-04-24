@@ -1,0 +1,24 @@
+.container {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-deep);
+  color: var(--text);
+}
+
+.container::placeholder {
+  color: var(--text-3);
+}
+
+.container:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.container:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

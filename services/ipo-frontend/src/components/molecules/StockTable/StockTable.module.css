@@ -1,0 +1,39 @@
+.container {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+}
+
+.container thead {
+  background-color: var(--bg-deep);
+}
+
+.container th,
+.container td {
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.container th {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.row {
+  cursor: pointer;
+}
+
+.row:hover {
+  background-color: var(--surface-2);
+}
+
+.empty {
+  text-align: center;
+  color: var(--text-3);
+  padding: 1.5rem;
+}

@@ -1,0 +1,56 @@
+:root {
+  --bg: #0F172A;
+  --bg-deep: #0A1120;
+  --surface: #1E293B;
+  --surface-2: #243449;
+  --surface-3: #334155;
+  --border: #334155;
+  --border-soft: #293548;
+  --primary: #10B981;
+  --primary-hover: #059669;
+  --primary-soft: rgba(16, 185, 129, 0.12);
+  --text: #F1F5F9;
+  --text-2: #94A3B8;
+  --text-3: #64748B;
+
+  --s-fetched: #94A3B8;
+  --s-applied: #3B82F6;
+  --s-won: #10B981;
+  --s-lost: #6B7280;
+  --s-alt: #F59E0B;
+  --s-error: #EF4444;
+  --s-excl: #8B5CF6;
+
+  --s-fetched-soft: rgba(148, 163, 184, 0.12);
+  --s-applied-soft: rgba(59, 130, 246, 0.14);
+  --s-won-soft: rgba(16, 185, 129, 0.14);
+  --s-lost-soft: rgba(107, 114, 128, 0.18);
+  --s-alt-soft: rgba(245, 158, 11, 0.14);
+  --s-error-soft: rgba(239, 68, 68, 0.14);
+  --s-excl-soft: rgba(139, 92, 246, 0.14);
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Hiragino Sans",
+    "Noto Sans JP", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--bg);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}

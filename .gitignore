@@ -1,0 +1,55 @@
+# Rust
+/services/target/
+
+# Node.js
+node_modules/
+
+# Build outputs
+/_build/
+.next/
+dist/
+
+# Test / Coverage
+lcov.info
+test-results/
+playwright-report/
+blob-report/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# pnpm
+.pnpm-debug.log*
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Claude Code
+.claude/settings.local.json
+.claude/plans/
+
+# Packaged skill
+*.skill

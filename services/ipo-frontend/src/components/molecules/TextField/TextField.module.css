@@ -1,0 +1,21 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.required {
+  margin-left: 0.25rem;
+  color: var(--s-error);
+}
+
+.error {
+  color: var(--s-error);
+}

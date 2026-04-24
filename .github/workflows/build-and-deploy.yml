@@ -1,0 +1,188 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_branch:
+        description: "デプロイするブランチ、タグ、またはコミット SHA"
+        required: true
+        default: "main"
+        type: string
+      deploy_environment:
+        description: "デプロイ先環境"
+        required: true
+        default: "STG"
+        type: choice
+        options:
+          - STG
+          - PRD
+      deploy_all_applications:
+        description: "全てのアプリケーションを選択"
+        required: true
+        default: false
+        type: boolean
+      deploy_ipo_api:
+        description: "ipo-api をデプロイ"
+        required: true
+        default: false
+        type: boolean
+      deploy_ipo_browser:
+        description: "ipo-browser をデプロイ"
+        required: true
+        default: false
+        type: boolean
+      deploy_ipo_info_fetcher:
+        description: "ipo-info-fetcher をデプロイ"
+        required: true
+        default: false
+        type: boolean
+      deploy_ipo_result_checker:
+        description: "ipo-result-checker をデプロイ"
+        required: true
+        default: false
+        type: boolean
+      deploy_ipo_frontend:
+        description: "ipo-frontend をデプロイ"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  GCP_REGION: asia-northeast1
+
+concurrency:
+  group: deploy-${{ github.workflow }}-${{ inputs.deploy_environment }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-targets:
+    name: Resolve Targets
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.resolve.outputs.services }}
+    steps:
+      - name: Resolve selected applications
+        id: resolve
+        env:
+          DEPLOY_ALL_APPLICATIONS: ${{ inputs.deploy_all_applications }}
+          DEPLOY_IPO_API: ${{ inputs.deploy_ipo_api }}
+          DEPLOY_IPO_BROWSER: ${{ inputs.deploy_ipo_browser }}
+          DEPLOY_IPO_INFO_FETCHER: ${{ inputs.deploy_ipo_info_fetcher }}
+          DEPLOY_IPO_RESULT_CHECKER: ${{ inputs.deploy_ipo_result_checker }}
+          DEPLOY_IPO_FRONTEND: ${{ inputs.deploy_ipo_frontend }}
+          DEPLOY_BRANCH: ${{ inputs.deploy_branch }}
+          DEPLOY_ENVIRONMENT: ${{ inputs.deploy_environment }}
+        run: |
+          set -euo pipefail
+
+          selected_services=()
+
+          if [[ "${DEPLOY_ALL_APPLICATIONS}" == "true" ]]; then
+            selected_services=(
+              "ipo-api"
+              "ipo-browser"
+              "ipo-info-fetcher"
+              "ipo-result-checker"
+              "ipo-frontend"
+            )
+          else
+            [[ "${DEPLOY_IPO_API}" == "true" ]] && selected_services+=("ipo-api")
+            [[ "${DEPLOY_IPO_BROWSER}" == "true" ]] && selected_services+=("ipo-browser")
+            [[ "${DEPLOY_IPO_INFO_FETCHER}" == "true" ]] && selected_services+=("ipo-info-fetcher")
+            [[ "${DEPLOY_IPO_RESULT_CHECKER}" == "true" ]] && selected_services+=("ipo-result-checker")
+            [[ "${DEPLOY_IPO_FRONTEND}" == "true" ]] && selected_services+=("ipo-frontend")
+          fi
+
+          if [[ ${#selected_services[@]} -eq 0 ]]; then
+            echo "少なくとも 1 つのアプリケーションを選択してください。" >&2
+            exit 1
+          fi
+
+          services_json="$(jq -cn '$ARGS.positional' --args "${selected_services[@]}")"
+          echo "services=${services_json}" >> "${GITHUB_OUTPUT}"
+
+          {
+            echo "## Deploy Request"
+            echo "- Branch: \`${DEPLOY_BRANCH}\`"
+            echo "- Environment: \`${DEPLOY_ENVIRONMENT}\`"
+            echo "- Applications: \`${services_json}\`"
+            echo ""
+            echo "\`deploy_all_applications\` を ON にすると全て選択されます。"
+            echo "全て解除したい場合は各チェックを外してください。"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  deploy:
+    name: Deploy ${{ matrix.service }} to ${{ inputs.deploy_environment }}
+    needs: resolve-targets
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.deploy_environment }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.resolve-targets.outputs.services) }}
+    steps:
+      - name: Checkout deployment ref
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.deploy_branch }}
+
+      - name: Resolve revision
+        id: revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker "${{ env.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build and push image
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          IMAGE_TAG: ${{ steps.revision.outputs.sha }}
+        run: |
+          set -euo pipefail
+
+          image="${{ env.GCP_REGION }}-docker.pkg.dev/${GCP_PROJECT_ID}/ipotto/${{ matrix.service }}:${IMAGE_TAG}"
+          docker build -t "${image}" -f "docker/${{ matrix.service }}/Dockerfile" services
+          docker push "${image}"
+
+      - name: Deploy to Cloud Run
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          IMAGE_TAG: ${{ steps.revision.outputs.sha }}
+        run: |
+          set -euo pipefail
+
+          image="${{ env.GCP_REGION }}-docker.pkg.dev/${GCP_PROJECT_ID}/ipotto/${{ matrix.service }}:${IMAGE_TAG}"
+          gcloud run deploy "${{ matrix.service }}" \
+            --project "${GCP_PROJECT_ID}" \
+            --image "${image}" \
+            --region "${{ env.GCP_REGION }}" \
+            --quiet
+
+      - name: Write deployment summary
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          IMAGE_TAG: ${{ steps.revision.outputs.sha }}
+        run: |
+          {
+            echo "## Deployment Result"
+            echo "- Environment: \`${{ inputs.deploy_environment }}\`"
+            echo "- Service: \`${{ matrix.service }}\`"
+            echo "- Ref: \`${{ inputs.deploy_branch }}\`"
+            echo "- Revision: \`${IMAGE_TAG}\`"
+            echo "- Image: \`${{ env.GCP_REGION }}-docker.pkg.dev/${GCP_PROJECT_ID}/ipotto/${{ matrix.service }}:${IMAGE_TAG}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

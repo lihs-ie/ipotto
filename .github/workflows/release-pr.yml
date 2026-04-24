@@ -1,0 +1,126 @@
+name: Release PR
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: release-pr-develop
+  cancel-in-progress: true
+
+jobs:
+  sync-release-pr:
+    name: Sync Release PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch branches
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune origin main develop
+
+      - name: Build release summary
+        id: summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          commit_count="$(git rev-list --count origin/main..origin/develop)"
+          echo "commit_count=${commit_count}" >> "${GITHUB_OUTPUT}"
+
+          cat <<EOF > release-pr-body.md
+          ## 概要
+          \`develop\` から \`main\` への自動リリース PR です。
+
+          ## リリース内容
+          EOF
+
+          if [ "${commit_count}" -eq 0 ]; then
+            echo "- 差分はありません。" >> release-pr-body.md
+          else
+            release_pr_numbers="$(
+              git log --merges --first-parent --reverse --pretty=format:'%s' origin/main..origin/develop \
+                | sed -n 's/^Merge pull request #\([0-9][0-9]*\) .*/\1/p'
+            )"
+
+            if [ -z "${release_pr_numbers}" ]; then
+              echo "- マージ済み PR は検出できませんでした。" >> release-pr-body.md
+            else
+              while IFS= read -r pr_number; do
+                pr_title="$(
+                  gh pr view "${pr_number}" \
+                    --repo "${REPOSITORY}" \
+                    --json title \
+                    --jq '.title'
+                )"
+                printf -- '- #%s %s\n' "${pr_number}" "${pr_title}" >> release-pr-body.md
+              done <<< "${release_pr_numbers}"
+            fi
+          fi
+
+          cat <<EOF >> release-pr-body.md
+
+          ## Compare
+          - [main...develop](https://github.com/${REPOSITORY}/compare/main...develop)
+
+          ## メモ
+          - この PR は \`develop\` 更新時に自動作成または更新されます。
+          - merge 後は release tag と GitHub Release が自動作成されます。
+          EOF
+
+          echo "title=Release: develop -> main" >> "${GITHUB_OUTPUT}"
+
+      - name: Create or update release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TITLE: ${{ steps.summary.outputs.title }}
+          COMMIT_COUNT: ${{ steps.summary.outputs.commit_count }}
+        run: |
+          set -euo pipefail
+
+          existing_pr_number="$(
+            gh pr list \
+              --repo "${REPOSITORY}" \
+              --base main \
+              --head develop \
+              --state open \
+              --json number \
+              --jq '.[0].number // empty'
+          )"
+
+          if [ "${COMMIT_COUNT}" -eq 0 ]; then
+            if [ -n "${existing_pr_number}" ]; then
+              gh pr close "${existing_pr_number}" \
+                --repo "${REPOSITORY}" \
+                --comment "main と develop の差分がなくなったため、自動でクローズします。"
+            fi
+            exit 0
+          fi
+
+          if [ -n "${existing_pr_number}" ]; then
+            gh pr edit "${existing_pr_number}" \
+              --repo "${REPOSITORY}" \
+              --title "${TITLE}" \
+              --body-file release-pr-body.md
+            exit 0
+          fi
+
+          gh pr create \
+            --repo "${REPOSITORY}" \
+            --base main \
+            --head develop \
+            --title "${TITLE}" \
+            --body-file release-pr-body.md

@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "ipo-backend-shared",
+    "ipo-api",
+    "ipo-info-fetcher",
+    "ipo-result-checker",
+    "ipo-applier",
+]
+resolver = "2"

@@ -1,0 +1,559 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust-lint-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services
+    env:
+      # Integration tests under ipo-backend-shared/tests/ connect to the
+      # Firebase + Pub/Sub emulators started below so cargo test drives
+      # the real gRPC `firestore` / `gcloud-pubsub` crates against live
+      # datastores. Without these env vars the tests become no-ops.
+      FIRESTORE_EMULATOR_HOST: localhost:8088
+      FIREBASE_PROJECT_ID: ipotto-local
+      PUBSUB_EMULATOR_HOST: localhost:8085
+      GCP_PROJECT: ipotto-local
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services
+      - name: Start Firebase + Pub/Sub emulators
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker compose up -d --build firebase-emulator pubsub-emulator
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:4000/ > /dev/null 2>&1; then
+              echo "Firebase emulator ready"
+              break
+            fi
+            echo "Waiting for Firebase emulator... ($i/60)"
+            sleep 2
+          done
+          for i in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8085)" = "200" ]; then
+              echo "Pub/Sub emulator ready"
+              exit 0
+            fi
+            echo "Waiting for Pub/Sub emulator... ($i/60)"
+            sleep 2
+          done
+          echo "Emulators failed to start"
+          docker compose logs firebase-emulator pubsub-emulator
+          exit 1
+      - name: Format check
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --all
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Coverage
+        run: cargo llvm-cov --all --lcov --output-path lcov.info
+      - name: Enforce ipo-backend-shared coverage threshold (Phase 0 Task 0.1)
+        run: cargo llvm-cov -p ipo-backend-shared --fail-under-lines 80 --summary-only
+      - name: Show emulator logs on failure
+        if: failure()
+        working-directory: ${{ github.workspace }}
+        run: docker compose logs firebase-emulator pubsub-emulator
+      - name: Stop emulators
+        if: success() || failure()
+        working-directory: ${{ github.workspace }}
+        run: docker compose stop firebase-emulator pubsub-emulator
+
+  rust-integration-tests:
+    name: Rust Integration Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services
+      - name: Run shared infrastructure integration tests
+        run: "cargo test -p ipo-backend-shared infrastructure::"
+      - name: Run ipo-api integration tests
+        run: "cargo test -p ipo-api presentation::routes::tests::"
+      - name: Run ipo-info-fetcher integration tests
+        run: "cargo test -p ipo-info-fetcher presentation::routes::tests::"
+      - name: Run ipo-result-checker integration tests
+        run: "cargo test -p ipo-result-checker presentation::routes::tests::"
+
+  docker-compose-smoke:
+    name: Docker Compose Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Start integration infrastructure
+        run: |
+          docker compose up -d \
+            firebase-emulator \
+            pubsub-emulator \
+            html-mock-server \
+            notification-mock \
+            ipo-browser \
+            ipo-api \
+            ipo-info-fetcher \
+            ipo-result-checker \
+            ipo-applier
+          docker compose ps
+
+      - name: Setup Pub/Sub emulator
+        env:
+          PUBSUB_EMULATOR_HOST: localhost:8085
+          GCP_PROJECT: ipotto-local
+        run: bash scripts/setup-pubsub-emulator.sh
+
+      - name: Wait for services
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:8081/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:8082/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:8083/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:8084/health > /dev/null 2>&1; then
+              echo "Services ready"
+              exit 0
+            fi
+            echo "Waiting for services... ($i/60)"
+            sleep 2
+          done
+          echo "Services failed to start"
+          docker compose logs
+          exit 1
+
+      - name: Smoke test ipo-api unauthenticated paths
+        run: |
+          curl -sf http://localhost:8080/health | jq -e '.status == "ok"'
+          # /api/v1/* requires Firebase ID token authentication (Task 1.3);
+          # an anonymous request must fail fast with 401.
+          status=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8080/api/v1/stocks)
+          if [ "$status" != "401" ]; then
+            echo "expected 401 on unauthenticated /api/v1/stocks, got $status"
+            exit 1
+          fi
+
+      - name: Mint Firebase emulator ID token for allowed user
+        id: mint_allowed_token
+        run: |
+          response=$(curl -sS -X POST \
+            "http://localhost:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key" \
+            -H 'content-type: application/json' \
+            -d '{"email":"test@example.com","password":"test-password-allowed","returnSecureToken":true}')
+          token=$(echo "$response" | jq -r '.idToken')
+          if [ -z "$token" ] || [ "$token" = "null" ]; then
+            echo "failed to obtain emulator ID token for allowed user: $response"
+            exit 1
+          fi
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Mint Firebase emulator ID token for non-allowed user
+        id: mint_denied_token
+        run: |
+          response=$(curl -sS -X POST \
+            "http://localhost:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key" \
+            -H 'content-type: application/json' \
+            -d '{"email":"mallory@example.com","password":"test-password-denied","returnSecureToken":true}')
+          token=$(echo "$response" | jq -r '.idToken')
+          if [ -z "$token" ] || [ "$token" = "null" ]; then
+            echo "failed to obtain emulator ID token for denied user: $response"
+            exit 1
+          fi
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test ipo-api reference endpoints (Phase 1 Sprint 2 / M1)
+        env:
+          ALLOWED_TOKEN: ${{ steps.mint_allowed_token.outputs.token }}
+        run: |
+          auth_header="Authorization: Bearer ${ALLOWED_TOKEN}"
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/stocks \
+            | jq -e 'has("items") and has("totalCount")'
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/dashboard \
+            | jq -e 'has("statusCounts")'
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/exclusions \
+            | jq -e 'has("items")'
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/notifications/settings \
+            | jq -e 'has("enabled") and has("channels")'
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/accounts \
+            | jq -e 'has("items")'
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/logs \
+            | jq -e 'has("items")'
+
+      - name: Smoke test ipo-api allow-list rejection (Task 1.4)
+        env:
+          DENIED_TOKEN: ${{ steps.mint_denied_token.outputs.token }}
+        run: |
+          status=$(curl -o /dev/null -s -w "%{http_code}" \
+            -H "Authorization: Bearer ${DENIED_TOKEN}" \
+            http://localhost:8080/api/v1/stocks)
+          if [ "$status" != "403" ]; then
+            echo "expected 403 for non-allowed email, got $status"
+            exit 1
+          fi
+
+      - name: Phase 2 Sprint 3 smoke — exclusion CRUD (API-005 / 006)
+        env:
+          ALLOWED_TOKEN: ${{ steps.mint_allowed_token.outputs.token }}
+        run: |
+          auth_header="Authorization: Bearer ${ALLOWED_TOKEN}"
+
+          response=$(curl -sf -H "$auth_header" -H 'content-type: application/json' \
+            -X POST http://localhost:8080/api/v1/exclusions \
+            -d '{"companyName":"スモークテスト株式会社","reason":"phase2-smoke"}')
+          identifier=$(echo "$response" | jq -r '.identifier')
+          if [ -z "$identifier" ] || [ "$identifier" = "null" ]; then
+            echo "failed to register exclusion: $response"; exit 1
+          fi
+
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/exclusions \
+            | jq -e --arg id "$identifier" '.items | any(.identifier == $id)'
+
+          status=$(curl -o /dev/null -s -w "%{http_code}" \
+            -H "$auth_header" \
+            -X DELETE "http://localhost:8080/api/v1/exclusions/${identifier}")
+          if [ "$status" != "204" ]; then
+            echo "expected 204 on delete exclusion, got $status"; exit 1
+          fi
+
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/exclusions \
+            | jq -e --arg id "$identifier" '.items | any(.identifier == $id) | not'
+
+      - name: Phase 2 Sprint 3 smoke — notification settings update (API-008)
+        env:
+          ALLOWED_TOKEN: ${{ steps.mint_allowed_token.outputs.token }}
+        run: |
+          auth_header="Authorization: Bearer ${ALLOWED_TOKEN}"
+
+          # Register Email + LINE + Slack channels so the Sprint 4
+          # dispatch smoke can assert that every adapter reaches its
+          # respective notification-mock endpoint when a single
+          # ApplicationCompleted event is published.
+          payload='{
+            "enabled": true,
+            "channels": [
+              {
+                "channelType": "Email",
+                "destination": {"address": "smoke-target@example.com"},
+                "enabled": true,
+                "subscriptions": {"ApplicationCompleted": true}
+              },
+              {
+                "channelType": "LINE",
+                "destination": {"token": "smoke-line-token"},
+                "enabled": true,
+                "subscriptions": {"ApplicationCompleted": true}
+              },
+              {
+                "channelType": "Slack",
+                "destination": {"webhookUrl": "http://notification-mock:80/slack/smoke"},
+                "enabled": true,
+                "subscriptions": {"ApplicationCompleted": true}
+              }
+            ]
+          }'
+          curl -sf -H "$auth_header" -H 'content-type: application/json' \
+            -X PUT http://localhost:8080/api/v1/notifications/settings \
+            -d "$payload" \
+            | jq -e '.channelCount == 3 and .enabled == true'
+
+          curl -sf -H "$auth_header" http://localhost:8080/api/v1/notifications/settings \
+            | jq -e '.enabled == true and (.channels | length) == 3'
+
+      - name: Phase 2 Sprint 3 smoke — securities account CRUD (API-010 / 011 / 012)
+        env:
+          ALLOWED_TOKEN: ${{ steps.mint_allowed_token.outputs.token }}
+        run: |
+          auth_header="Authorization: Bearer ${ALLOWED_TOKEN}"
+
+          register_payload='{
+            "securitiesCompany": "Rakuten",
+            "loginId": "smokeuser",
+            "loginPassword": "smoke-password-1",
+            "tradingPassword": "smoke-trading-1",
+            "mailAddress": "smoke@example.com",
+            "mailPassword": "smoke-mail-1",
+            "imapHost": "imap.example.com",
+            "imapPort": 993
+          }'
+          response=$(curl -sf -H "$auth_header" -H 'content-type: application/json' \
+            -X POST http://localhost:8080/api/v1/accounts \
+            -d "$register_payload")
+          identifier=$(echo "$response" | jq -r '.identifier')
+          if [ -z "$identifier" ] || [ "$identifier" = "null" ]; then
+            echo "failed to register account: $response"; exit 1
+          fi
+
+          update_payload='{
+            "loginId": "updated-smokeuser",
+            "loginPassword": "smoke-password-2",
+            "tradingPassword": "smoke-trading-2",
+            "mailAddress": "smoke-updated@example.com",
+            "mailPassword": "smoke-mail-2",
+            "imapHost": "imap-updated.example.com",
+            "imapPort": 993
+          }'
+          curl -sf -H "$auth_header" -H 'content-type: application/json' \
+            -X PUT "http://localhost:8080/api/v1/accounts/${identifier}" \
+            -d "$update_payload" \
+            | jq -e --arg id "$identifier" '.identifier == $id'
+
+          # Phase 2 Sprint 3 Task 3.4 — API-013 connection test.
+          # ipo-api delegates to ipo-browser via the BrowserServiceClient;
+          # ipo-browser's /internal/accounts/test endpoint performs a
+          # reachability check against html-mock-server today (Phase 3
+          # Sprint 5 swaps in the real Playwright login flow).
+          curl -sf -H "$auth_header" -X POST \
+            "http://localhost:8080/api/v1/accounts/${identifier}/test" \
+            | jq -e '.success == true and (.message | length) > 0 and (.testedAt | length) > 0'
+
+          status=$(curl -o /dev/null -s -w "%{http_code}" \
+            -H "$auth_header" \
+            -X DELETE "http://localhost:8080/api/v1/accounts/${identifier}")
+          if [ "$status" != "204" ]; then
+            echo "expected 204 on delete account, got $status"; exit 1
+          fi
+
+      - name: Phase 3 Sprint 7 smoke — IPO apply submit (7.1) against html-mock-server
+        run: |
+          # Directly hits ipo-browser's Sprint 7 endpoint. Phase 4 will
+          # add the Pub/Sub handler + ApplyForLotteryUseCase that wraps
+          # this call from ipo-api side; until then, this smoke verifies
+          # the ipo-browser side of the contract.
+          payload='{
+            "credential": {
+              "loginId": "smokeuser",
+              "loginPassword": "smoke-password-1",
+              "tradingPassword": "smoke-trading-1",
+              "mailAddress": "smoke@example.com",
+              "mailPassword": "smoke-mail-1",
+              "imapHost": "imap.example.com",
+              "imapPort": 993
+            },
+            "stockIdentifier": "01HA1234567890ABCDEFGHJKMN",
+            "companyName": "テスト第一株式会社",
+            "shares": 100,
+            "price": 1400
+          }'
+          curl -sf -H 'content-type: application/json' \
+            -X POST http://localhost:8081/internal/lottery-applications/submit \
+            -d "$payload" \
+            | jq -e '.status == "success"'
+
+          duplicate_payload=$(echo "$payload" | jq '.stockIdentifier = "01HB1234567890ABCDEFGHJKMN" | .companyName = "テスト第二株式会社" | .price = 2100')
+          curl -sf -H 'content-type: application/json' \
+            -X POST http://localhost:8081/internal/lottery-applications/submit \
+            -d "$duplicate_payload" \
+            | jq -e '.status == "already_applied"'
+
+          insufficient_payload=$(echo "$payload" | jq '.stockIdentifier = "01HC1234567890ABCDEFGHJKMN" | .companyName = "テスト第三株式会社" | .price = 1800')
+          curl -sf -H 'content-type: application/json' \
+            -X POST http://localhost:8081/internal/lottery-applications/submit \
+            -d "$insufficient_payload" \
+            | jq -e '.status == "insufficient_balance"'
+
+      - name: Phase 3 Sprint 7 smoke — lottery result check (7.2) against html-mock-server
+        run: |
+          payload='{
+            "credential": {
+              "loginId": "smokeuser",
+              "loginPassword": "smoke-password-1",
+              "tradingPassword": "smoke-trading-1",
+              "mailAddress": "smoke@example.com",
+              "mailPassword": "smoke-mail-1",
+              "imapHost": "imap.example.com",
+              "imapPort": 993
+            },
+            "stockIdentifier": "01HA1234567890ABCDEFGHJKMN"
+          }'
+          curl -sf -H 'content-type: application/json' \
+            -X POST http://localhost:8081/internal/lottery-results/check \
+            -d "$payload" \
+            | jq -e '.result == "Won"'
+
+          lost_payload=$(echo "$payload" | jq '.stockIdentifier = "01HB1234567890ABCDEFGHJKMN"')
+          curl -sf -H 'content-type: application/json' \
+            -X POST http://localhost:8081/internal/lottery-results/check \
+            -d "$lost_payload" \
+            | jq -e '.result == "Lost"'
+
+          alternate_payload=$(echo "$payload" | jq '.stockIdentifier = "01HC1234567890ABCDEFGHJKMN"')
+          curl -sf -H 'content-type: application/json' \
+            -X POST http://localhost:8081/internal/lottery-results/check \
+            -d "$alternate_payload" \
+            | jq -e '.result == "Alternate"'
+
+          pending_payload=$(echo "$payload" | jq '.stockIdentifier = "01HD1234567890ABCDEFGHJKMN"')
+          curl -sf -H 'content-type: application/json' \
+            -X POST http://localhost:8081/internal/lottery-results/check \
+            -d "$pending_payload" \
+            | jq -e '.result == null'
+
+      - name: Phase 2 Sprint 4 smoke — notification dispatch (Email + LINE + Slack via notification-mock)
+        run: |
+          # The Sprint 3 notification settings step above installed
+          # three channels (Email / LINE / Slack) all subscribed to
+          # ApplicationCompleted. Publishing the Pub/Sub envelope to
+          # /internal/pubsub/ipo-notification makes the ipo-api
+          # dispatch use case resolve all three channels and hit the
+          # corresponding notification-mock endpoints:
+          #   - SENDGRID_ENDPOINT -> /sendgrid/mail/send (202)
+          #   - LINE_NOTIFY_ENDPOINT -> /line/api/notify (200)
+          #   - Slack channel's webhookUrl -> /slack/smoke (200)
+          # A single 204 response confirms every adapter succeeded.
+          # ApplicationCompleted does not use camelCase on its fields
+          # (unlike the API-level DTOs), so the payload must use the
+          # raw domain event's snake_case field names.
+          payload='{
+            "eventType": "ApplicationCompleted",
+            "payload": {
+              "identifier": "01HA1234567890ABCDEFGHJKMN",
+              "stock": "01HB1234567890ABCDEFGHJKMN",
+              "securities_account": "01HC1234567890ABCDEFGHJKMN",
+              "applied_shares": 100,
+              "applied_price": 1400,
+              "applied_at": "2026-03-25T10:00:00Z"
+            }
+          }'
+          status=$(curl -o /dev/null -s -w "%{http_code}" \
+            -H 'content-type: application/json' \
+            -X POST http://localhost:8080/internal/pubsub/ipo-notification \
+            -d "$payload")
+          if [ "$status" != "204" ]; then
+            echo "expected 204 on notification dispatch, got $status"
+            docker compose logs ipo-api notification-mock
+            exit 1
+          fi
+
+      - name: Smoke test ipo-info-fetcher
+        run: |
+          curl -sf http://localhost:8082/health | jq -e '.status == "ok"'
+          curl -sf -X POST http://localhost:8082/internal/pubsub/fetch \
+            | tee /tmp/ipo-info-fetcher-response.json
+          jq -e '.fetchedCount >= 1' /tmp/ipo-info-fetcher-response.json
+
+      - name: Phase 4 Sprint 8 smoke — Pub/Sub publish reached the emulator
+        run: |
+          # Pull the ipo-info-updated subscription to verify the publish
+          # above actually landed in the emulator (the in-memory
+          # publisher has been replaced by the real gRPC client in
+          # Sprint 8).
+          for attempt in $(seq 1 10); do
+            pulled=$(curl -sS -X POST \
+              "http://localhost:8085/v1/projects/ipotto-local/subscriptions/ipo-info-updated-notify-sub:pull" \
+              -H 'content-type: application/json' \
+              -d '{"maxMessages":5,"returnImmediately":true}')
+            received=$(echo "$pulled" | jq -r '.receivedMessages // [] | length')
+            if [ "$received" -ge 1 ]; then
+              echo "ipo-info-updated subscription received $received message(s)"
+              # Acknowledge so the DLQ smoke that follows does not see
+              # this as a stuck delivery.
+              ack_ids=$(echo "$pulled" | jq -r '[.receivedMessages[].ackId] | @json')
+              curl -sf -X POST \
+                "http://localhost:8085/v1/projects/ipotto-local/subscriptions/ipo-info-updated-notify-sub:acknowledge" \
+                -H 'content-type: application/json' \
+                -d "{\"ackIds\":$ack_ids}"
+              break
+            fi
+            echo "Attempt $attempt/10: no messages yet"
+            sleep 1
+          done
+          if [ "$received" -lt 1 ]; then
+            echo "No message appeared on ipo-info-updated after 10 attempts"
+            exit 1
+          fi
+
+      - name: Phase 4 Sprint 8 smoke — DLQ subscription starts empty
+        run: |
+          # ipo-dead-letter-sub is wired up by setup-pubsub-emulator.sh
+          # as a safety net. Under happy-path smoke we expect 0 messages
+          # since max_delivery_attempts (5) is well above the single
+          # publish we issued above.
+          pulled=$(curl -sS -X POST \
+            "http://localhost:8085/v1/projects/ipotto-local/subscriptions/ipo-dead-letter-sub:pull" \
+            -H 'content-type: application/json' \
+            -d '{"maxMessages":10,"returnImmediately":true}')
+          received=$(echo "$pulled" | jq -r '.receivedMessages // [] | length')
+          if [ "$received" -ne 0 ]; then
+            echo "DLQ had $received unexpected message(s): $pulled"
+            exit 1
+          fi
+          echo "DLQ subscription is empty as expected"
+
+      - name: Smoke test ipo-result-checker
+        run: |
+          curl -sf http://localhost:8083/health | jq -e '.status == "ok"'
+          curl -sf -X POST http://localhost:8083/internal/pubsub/check \
+            | tee /tmp/ipo-result-checker-response.json
+          jq -e '.checkedCount == 0' /tmp/ipo-result-checker-response.json
+
+      - name: Phase 4 Sprint 8 smoke — ipo-applier (DD-101) health + Pub/Sub apply trigger
+        run: |
+          # Health check.
+          curl -sf http://localhost:8084/health | jq -e '.status == "ok"'
+          # Explicit target_date payload — with no accounts registered the
+          # use case simply returns appliedCount=0 / skippedCount=0 / failedCount=0,
+          # which exercises the full pipeline (Firestore + Pub/Sub emulator +
+          # repository wiring) without depending on test fixtures.
+          payload='{"targetDate":"2026-04-22"}'
+          curl -sf -H 'content-type: application/json' \
+            -X POST http://localhost:8084/internal/pubsub/apply \
+            -d "$payload" \
+            | tee /tmp/ipo-applier-response.json
+          jq -e '.appliedCount >= 0 and .skippedCount >= 0 and .failedCount >= 0' \
+            /tmp/ipo-applier-response.json
+          # Empty body — must default to today's date without 4xx.
+          curl -sf -X POST http://localhost:8084/internal/pubsub/apply \
+            | jq -e '.appliedCount >= 0'
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop infrastructure
+        if: success() || failure()
+        run: docker compose down
+
+  node-lint-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [ipo-browser, ipo-frontend]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: services/${{ matrix.service }}/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: services/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: services
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Type check
+        run: pnpm tsc --noEmit
+      - name: Test
+        run: pnpm test --run --passWithNoTests
