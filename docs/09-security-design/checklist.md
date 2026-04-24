@@ -36,6 +36,12 @@ IPOtto の本番運用開始 (Sprint 13) に先立って、`docs/09-security-des
 - 非 Google provider は 403 Forbidden + `AUTHORIZATION_PROVIDER_UNSUPPORTED`
 - Emulator mode ではスキップ (emulator は `firebase` claim を生成しない場合がある)
 
+### 1.5 野村證券 2FA 方式実装 (Phase 8)
+- [ ] **未着手** — [野村證券認証 セキュリティ設計](./nomura-authentication.md) 参照
+- 2FA 方式は [Q-N-020](../user-actions/nomura-broker-information-request.md#q-n-020) 回答後に確定
+- メール OTP / SMS OTP / TOTP / 画像認証 / 質問応答 のいずれか
+- 実装は ipo-browser の `flows/nomura/auth/` 配下
+
 ---
 
 ## 2. シークレット管理
@@ -55,6 +61,10 @@ IPOtto の本番運用開始 (Sprint 13) に先立って、`docs/09-security-des
 ### 2.3 環境変数経由の秘匿情報
 - [x] **実装済** — `ALLOWED_EMAIL`, `SENDGRID_API_KEY` 等は Cloud Run の Secret 環境変数で注入 (terraform `cloud_run_services[*].secret_environment_variables`)
 - プレーンな env で秘匿情報を渡していないことを確認 (`terraform.tfvars` で `secret_environment_variables` を活用)
+
+### 2.4 野村證券 credential の Secret Manager 命名規則 (Phase 8)
+- [ ] **未着手** — 既存命名 `ipo-account-{accountId}` を維持し、野村追加時に変更しない方針（[野村證券認証 セキュリティ設計 § 4.1](./nomura-authentication.md#41-secret-manager-のキー命名)）
+- AccountCredential 構造を broker 別 enum 化する場合、payload schema を確定したうえで Secret Manager 内 JSON のフォーマットを更新
 
 ---
 

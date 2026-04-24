@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-IPOtto - 個人投資家向けIPO抽選申し込み自動化・管理Webアプリケーション。複数の証券会社での手動申し込み作業を自動化する。Phase 1 MVPは楽天証券のみ対象。
+IPOtto - 個人投資家向けIPO抽選申し込み自動化・管理Webアプリケーション。複数の証券会社での手動申し込み作業を自動化する。Phase 1 MVPは楽天証券のみ対象、Phase 8 で野村證券対応を追加予定（[要件](docs/01-requirements/nomura-broker-support.md) / [設計](docs/03-detailed-design/nomura-broker-adapter.md) / [情報収集依頼書](docs/user-actions/nomura-broker-information-request.md)）。
 
 ## アーキテクチャ
 

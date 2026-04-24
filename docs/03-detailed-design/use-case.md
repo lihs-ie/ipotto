@@ -112,6 +112,8 @@ graph TD
 | DD-100 | IPO銘柄情報を取得・更新する | システム | Command | FetchIpoStocksInput | FetchIpoStocksOutput | [REQ-001](../01-requirements/requirements-specification.md#req-001), [UC-001](../01-requirements/requirements-specification.md#uc-001) | — |
 | DD-101 | IPO抽選に自動申し込みする | システム | Command | ApplyForLotteryInput | ApplyForLotteryOutput | [REQ-002](../01-requirements/requirements-specification.md#req-002), [UC-002](../01-requirements/requirements-specification.md#uc-002) | ApplicationEligibilityService |
 | DD-102 | 抽選結果を自動確認する | システム | Command | CheckLotteryResultInput | CheckLotteryResultOutput | [REQ-003](../01-requirements/requirements-specification.md#req-003), [UC-003](../01-requirements/requirements-specification.md#uc-003) | — |
+
+> **Phase 8 補足**: DD-101 / DD-102 / DD-109 は `BrokerBrowserPort` 経由で ipo-browser に委譲するため、Rust 側のユースケース実装は broker 別の分岐を持たない。broker dispatch は ipo-browser 内（[野村證券アダプター詳細設計書 § 3.1](./nomura-broker-adapter.md#31-broker-dispatch-の配置)）で行う。
 | DD-103 | 除外銘柄を登録する | 投資家 | Command | RegisterExclusionInput | RegisterExclusionOutput | [REQ-005](../01-requirements/requirements-specification.md#req-005), [UC-005](../01-requirements/requirements-specification.md#uc-005) | — |
 | DD-104 | 除外銘柄を削除する | 投資家 | Command | RemoveExclusionInput | — | [REQ-005](../01-requirements/requirements-specification.md#req-005), [UC-005](../01-requirements/requirements-specification.md#uc-005) | — |
 | DD-105 | 通知設定を更新する | 投資家 | Command | UpdateNotificationSettingInput | UpdateNotificationSettingOutput | [REQ-006](../01-requirements/requirements-specification.md#req-006), [UC-006](../01-requirements/requirements-specification.md#uc-006) | — |

@@ -126,6 +126,7 @@ graph TD
 | テスト証券口座 | 認証テスト | securitiesCompany: "Rakuten", テスト用認証情報 |
 | テスト通知設定 | 通知テスト | LINE + Slack チャネル設定済み |
 | 楽天証券HTMLモック | ブラウザ操作テスト | ログイン画面、画像認証画面、IPO一覧、申し込み画面、結果画面 |
+| 野村證券HTMLモック | ブラウザ操作テスト (Phase 8) | ログイン画面、2FA 画面、IPO 一覧、申込画面、結果画面。詳細は [野村證券アダプター詳細設計書 § 6.2](../03-detailed-design/nomura-broker-adapter.md#62-html-mock) |
 
 ### 3.3 HTMLモックファイル
 
@@ -145,6 +146,15 @@ tests/fixtures/html/rakuten/
 ├── ipo_result_page_lost.html            抽選結果画面（落選）
 ├── ipo_result_page_alternate.html       抽選結果画面（補欠当選）
 └── ipo_result_page_pending.html         抽選結果画面（結果未発表）
+
+# Phase 8 で追加予定 (ユーザー回答後に確定)
+tests/fixtures/html/nomura/
+├── login_page.html                      ログイン画面
+├── two_factor_page.html                 2FA 画面（方式は Q-N-020 で確定）
+├── ipo_list_page.html                   IPO 一覧画面
+├── ipo_application_page.html            IPO 申込画面
+├── ipo_application_success.html         申込成功画面
+└── ipo_result_page.html                 抽選結果画面
 ```
 
 ## 4. テストケース
