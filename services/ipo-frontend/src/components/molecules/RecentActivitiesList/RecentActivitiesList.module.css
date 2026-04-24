@@ -1,8 +1,8 @@
 .container {
   padding: 1rem;
-  background-color: #fff;
-  border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
+  background-color: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
 }
 
 .list {
@@ -19,21 +19,21 @@
   grid-template-columns: 6rem 1fr auto auto;
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
-  background-color: #f9fafb;
-  border-radius: 0.375rem;
+  background-color: var(--bg-deep);
+  border-radius: var(--radius-sm);
   font-size: 0.875rem;
 }
 
 .timestamp {
-  color: #6b7280;
+  color: var(--text-3);
 }
 
 .company {
-  color: #111827;
+  color: var(--text);
   font-weight: 600;
 }
 
 .event,
 .securities {
-  color: #374151;
+  color: var(--text-2);
 }

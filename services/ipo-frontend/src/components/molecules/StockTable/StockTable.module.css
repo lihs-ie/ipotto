@@ -1,14 +1,14 @@
 .container {
   width: 100%;
   border-collapse: collapse;
-  background-color: #fff;
-  border-radius: 0.5rem;
+  background-color: var(--surface);
+  border-radius: var(--radius);
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-soft);
 }
 
 .container thead {
-  background-color: #f3f4f6;
+  background-color: var(--bg-deep);
 }
 
 .container th,
@@ -16,12 +16,12 @@
   padding: 0.625rem 0.75rem;
   text-align: left;
   font-size: 0.875rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .container th {
   font-weight: 600;
-  color: #374151;
+  color: var(--text-2);
 }
 
 .row {
@@ -29,11 +29,11 @@
 }
 
 .row:hover {
-  background-color: #f9fafb;
+  background-color: var(--surface-2);
 }
 
 .empty {
   text-align: center;
-  color: #6b7280;
+  color: var(--text-3);
   padding: 1.5rem;
 }

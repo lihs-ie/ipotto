@@ -1,4 +1,4 @@
-use std::{env, sync::Arc};
+use std::{env, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use ipo_backend_shared::http::HttpServiceConfig;
@@ -6,7 +6,7 @@ use ipo_backend_shared::http::HttpServiceConfig;
 use crate::middleware::firebase_jwk_cache::FetchedJwks;
 use crate::middleware::{
     EmailAllowlistConfig, FirebaseAuthConfig, FirebaseAuthError, FirebaseJwkCache,
-    FirebaseTokenVerifier, GoogleSecureTokenFetcher, JwksFetcher,
+    FirebaseTokenVerifier, GoogleSecureTokenFetcher, JwksFetcher, RateLimitConfig,
 };
 
 pub const HTTP_SERVICE_CONFIG: HttpServiceConfig = HttpServiceConfig::new("ipo-api", 8080);
@@ -55,6 +55,25 @@ pub fn line_notify_endpoint() -> String {
 /// Loads the email allow-list from `ALLOWED_EMAIL` (comma-separated).
 pub fn build_email_allowlist() -> Result<Arc<EmailAllowlistConfig>, String> {
     EmailAllowlistConfig::from_env().map(Arc::new)
+}
+
+/// Builds the per-user rate limit configuration. Values can be tuned
+/// without a code change via `RATE_LIMIT_MAX_REQUESTS` (default 100)
+/// and `RATE_LIMIT_WINDOW_SECONDS` (default 60) — local docker-compose
+/// overrides these to generous values so developers are not throttled
+/// while exploring the UI with seeded data.
+pub fn build_rate_limit_config() -> RateLimitConfig {
+    let max_requests = env::var("RATE_LIMIT_MAX_REQUESTS")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(100);
+    let window_seconds = env::var("RATE_LIMIT_WINDOW_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(60);
+    RateLimitConfig::new(max_requests, Duration::from_secs(window_seconds))
 }
 
 /// Constructs the Firebase ID token verifier used by the authentication

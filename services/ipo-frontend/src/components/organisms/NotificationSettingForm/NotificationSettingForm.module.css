@@ -17,5 +17,5 @@
 }
 
 .savedNotice {
-  color: #15803d;
+  color: var(--s-won);
 }

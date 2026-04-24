@@ -3,7 +3,7 @@ import styles from "./Button.module.css";
 type Props = {
   label: string;
   onClick?: () => void;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "ghost" | "danger";
   type?: "button" | "submit" | "reset";
   disabled?: boolean;
 };

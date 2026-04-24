@@ -19,7 +19,7 @@ async fn main() {
         .expect("failed to construct Firebase token verifier");
     let allowlist = config::build_email_allowlist().expect("failed to construct email allow-list");
     let rate_limiter = Arc::new(middleware::RateLimitState::new(
-        middleware::RateLimitConfig::default(),
+        config::build_rate_limit_config(),
     ));
     let router = presentation::routes::create_router(
         container,

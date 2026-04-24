@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 
 import { stockIdentifierSchema } from "@ipotto/shared";
@@ -13,18 +13,18 @@ import { useAsyncResult } from "@/lib/api/use-async-result";
 export const StockDetailClient = () => {
   const params = useParams<{ stockIdentifier: string }>();
   const rawIdentifier = params.stockIdentifier;
-  const parsed = stockIdentifierSchema.safeParse(rawIdentifier);
+  const parsed = useMemo(
+    () => stockIdentifierSchema.safeParse(rawIdentifier),
+    [rawIdentifier],
+  );
   const api = useIpoApi();
 
-  const fetcher = useCallback(
-    async () => {
-      if (!parsed.success) {
-        throw new Error("invalid stock identifier");
-      }
-      return api.getIpoStock(parsed.data);
-    },
-    [api, parsed],
-  );
+  const fetcher = useCallback(async () => {
+    if (!parsed.success) {
+      throw new Error("invalid stock identifier");
+    }
+    return api.getIpoStock(parsed.data);
+  }, [api, parsed]);
   const { state } = useAsyncResult(fetcher, [fetcher]);
 
   if (!parsed.success) {

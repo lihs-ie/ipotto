@@ -1,20 +1,42 @@
 .container {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1.5rem;
-  background-color: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  height: 56px;
+  padding: 0 28px;
+  gap: 16px;
+  background-color: var(--bg);
+  border-bottom: 1px solid var(--border-soft);
   grid-area: header;
 }
 
-.brand {
+.breadcrumb {
   display: flex;
   align-items: center;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.breadcrumb .separator {
+  margin: 0 8px;
+  color: var(--text-3);
+}
+
+.breadcrumb .active {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.spacer {
+  flex: 1;
 }
 
 .actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 12px;
+}
+
+.email {
+  font-size: 13px;
+  color: var(--text-2);
 }

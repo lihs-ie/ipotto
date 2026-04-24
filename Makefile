@@ -84,6 +84,25 @@ rust-coverage-shared: ## ipo-backend-sharedのカバレッジ80%+閾値検証（
 rust-ci: rust-fmt-check rust-lint rust-test rust-coverage-shared ## Rust CI相当（直接実行。actrun版: make ci-rust）
 
 # ============================================================
+# Seed (ローカル開発用)
+# ============================================================
+
+.PHONY: seed seed-reset
+
+seed: ## ローカル Firestore Emulator にテストデータ投入 (docker 稼働中が前提)
+	cd services && \
+	FIRESTORE_EMULATOR_HOST=127.0.0.1:8088 \
+	FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+	CREDENTIAL_STORE_BACKEND=in-memory \
+	FIREBASE_PROJECT_ID=ipotto-local \
+	cargo run --quiet --package ipo-api --features seed --bin seed
+
+seed-reset: ## Firestore Emulator の全ドキュメントを削除してから seed 投入
+	curl -sfX DELETE "http://127.0.0.1:8088/emulator/v1/projects/ipotto-local/databases/(default)/documents" \
+		&& echo "-- emulator data cleared"
+	@$(MAKE) seed
+
+# ============================================================
 # ipo-browser (services/ipo-browser/)
 # ============================================================
 

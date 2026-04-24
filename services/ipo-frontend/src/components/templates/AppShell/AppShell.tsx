@@ -4,7 +4,10 @@ import { usePathname } from "next/navigation";
 import { type ReactNode } from "react";
 
 import { Footer } from "@/components/organisms/Footer/Footer";
-import { Header } from "@/components/organisms/Header/Header";
+import {
+  Header,
+  resolveBreadcrumbs,
+} from "@/components/organisms/Header/Header";
 import { Sidebar } from "@/components/organisms/Sidebar/Sidebar";
 import { useAuth } from "@/lib/firebase/auth-context";
 
@@ -22,7 +25,11 @@ export const AppShell = (props: Props) => {
 
   return (
     <div className={styles.container}>
-      <Header userEmail={userEmail} onSignOut={auth.signOut} />
+      <Header
+        userEmail={userEmail}
+        onSignOut={auth.signOut}
+        breadcrumbs={resolveBreadcrumbs(pathname)}
+      />
       <Sidebar currentPath={pathname} />
       <main className={styles.main}>{props.children}</main>
       <Footer />

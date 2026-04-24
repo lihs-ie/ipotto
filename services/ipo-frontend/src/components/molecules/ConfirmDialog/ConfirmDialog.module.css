@@ -1,13 +1,15 @@
 .container {
   border: none;
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
   padding: 1.5rem;
   min-width: 20rem;
   max-width: 32rem;
+  background-color: var(--surface);
+  color: var(--text);
 }
 
 .container::backdrop {
-  background-color: rgba(17, 24, 39, 0.4);
+  background-color: rgba(10, 17, 32, 0.6);
 }
 
 .actions {

@@ -3,9 +3,9 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 1rem;
-  background-color: #fff;
-  border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
+  background-color: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
 }
 
 .toggle {

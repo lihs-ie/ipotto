@@ -8,10 +8,13 @@ test.describe("Authentication flow", () => {
     ).toBeVisible();
   });
 
-  test("login page reaches the IPOtto heading", async ({ page }) => {
+  test("login page shows IPOtto branding and welcome heading", async ({
+    page,
+  }) => {
     await page.goto("/login");
+    await expect(page.getByText("IPOtto", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "IPOtto",
+      "ようこそ",
     );
   });
 });
