@@ -1,3 +1,4 @@
+pub mod crypto;
 pub mod firestore;
 pub mod http_client;
 pub mod mail;
