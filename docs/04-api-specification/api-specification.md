@@ -608,7 +608,7 @@ Authorization: Bearer <firebase_id_token>
 
 | フィールド | 型 | 必須 | 説明 |
 |---|---|---|---|
-| `securitiesCompany` | string | Yes | 証券会社コード（`Rakuten`） |
+| `securitiesCompany` | string | Yes | 証券会社コード（Phase 1 MVP は `Rakuten`、Phase 8 で `Nomura` を追加。詳細は [野村證券対応 要件定義書](../01-requirements/nomura-broker-support.md)） |
 | `loginId` | string | Yes | ログインID |
 | `loginPassword` | string | Yes | ログインパスワード |
 | `tradingPassword` | string | Yes | 取引暗証番号 |

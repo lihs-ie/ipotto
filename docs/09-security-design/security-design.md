@@ -45,6 +45,9 @@ author: "lihs"
 | Information Disclosure | メール認証情報の漏洩 | Secret Manager | 高 | AccountCredentialの一部としてSecret Managerで暗号化管理 |
 | Denial of Service | Cloud Runへの大量リクエスト | ipo-frontend, ipo-api | 低 | Cloud Run標準のリクエスト制限、個人利用のため影響軽微 |
 | Elevation of Privilege（権限昇格） | GCPサービスアカウントの権限過剰 | 全GCPリソース | 中 | 最小権限の原則、サービスごとに個別のサービスアカウント |
+| Spoofing | 野村證券 phishing クローンへの誤接続 | ipo-browser | 中 | ログイン URL を `selectors.yaml: nomura.login.pageUrl` で固定、HTTPS 証明書検証必須（[野村證券認証 セキュリティ設計](./nomura-authentication.md)） |
+| Information Disclosure | 野村證券 2FA OTP のログ出力 | ipo-browser logs | 高 | OTP は OperationLog に出力しない、`pino` シリアライザで OTP フィールドをマスク |
+| Denial of Service | 野村サイトのレート制限超過 | ipo-browser | 低 | broker 別レート制限ロジック（[Q-N-060](../user-actions/nomura-broker-information-request.md#q-n-060) 回答後に閾値設定） |
 
 ### 2.2 リスク評価
 

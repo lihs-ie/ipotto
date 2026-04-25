@@ -97,6 +97,11 @@
 - セキュリティチェックリスト Sprint 13 持ち越し項目の消化
 - rate-limit / Google provider 強制 / Firestore reject-all rules / audit log / container scan
 
+### M8: 野村證券対応 (Phase 8)
+- 楽天 + 野村の 2 broker で IPO 抽選申込が稼働
+- broker dispatch アーキテクチャ確立（第 3 broker 追加が低コストで可能な状態）
+- 詳細は [野村證券対応 要件定義書](../01-requirements/nomura-broker-support.md) / [野村證券アダプター詳細設計書](../03-detailed-design/nomura-broker-adapter.md)
+
 ---
 
 ## 4. フェーズとスプリント計画
@@ -264,6 +269,39 @@
 | H6 | docs | ロードマップ Phase 7 追記 + セキュリティチェックリスト Sprint 14 完了 |
 
 **完了条件:** M7 達成。
+
+---
+
+### Phase 8: 野村證券対応（Sprint 16〜18, 6週間）<a id="phase-8"></a>
+
+**目的:** 楽天證券に加えて野村證券を broker として追加し、複数証券会社での分散申込を実現する。
+
+**前提条件:** [`docs/user-actions/nomura-broker-information-request.md`](../user-actions/nomura-broker-information-request.md) のユーザー回答完了
+
+#### Sprint 16: ドメイン層拡張 + broker dispatch 基盤
+- 16.1 `SecuritiesCompany::Nomura` variant 追加 + 全 match 網羅（[DD-201](../03-detailed-design/nomura-broker-adapter.md#21-ドメイン層)）
+- 16.2 `securitiesCompanySchema` (TS) を `["Rakuten", "Nomura"]` へ拡張
+- 16.3 `AccountCredential` の broker 別構造判断（Option-1 / Option-2、[DD-202](../03-detailed-design/nomura-broker-adapter.md#42-accountcredential-の構造判断-暫定)）
+- 16.4 `BrowserCredentialRequest` に `securitiesCompany` フィールド追加
+- 16.5 ipo-browser ルーティング層に broker dispatch を導入（楽天動作維持）
+
+#### Sprint 17: 野村フロー実装 + HTML mock + E2E
+- 17.1 `services/ipo-browser/src/flows/nomura/` 配下にログイン / 申込 / 結果取得を実装
+- 17.2 `selectors.yaml` に `nomura:` namespace を追加
+- 17.3 2FA フロー実装（[Q-N-020](../user-actions/nomura-broker-information-request.md#q-n-020) 結果に応じてメール / SMS / TOTP / 画像認証 / 質問応答）
+- 17.4 `apply-result-translator` / `lottery-result-translator` の i18n 化
+- 17.5 `html-mock-server` に `nomura/` フィクスチャ追加
+- 17.6 E2E テスト追加（楽天既存テストと並列で実行）
+
+#### Sprint 18: 実サイト接続テスト + UI 拡張 + 本番デプロイ
+- 18.1 実野村口座での接続テスト・初回申込フロー確認（[Runbook](../10-operations-design/nomura-integration-runbook.md) § 3）
+- 18.2 ipo-frontend の証券口座登録フォームに「証券会社選択」UI 追加
+- 18.3 ダッシュボード / 操作ログでの broker 別表示
+- 18.4 監視アラート（`nomura_connection_test_failure` 等）追加
+- 18.5 [セキュリティチェックリスト](../09-security-design/checklist.md) § 1.5 / § 2.4 のクローズ
+- 18.6 本番リリース
+
+**完了条件:** M8 達成。
 
 ---
 
@@ -464,3 +502,4 @@ API-013 `POST /api/v1/accounts/{id}/test` の接続テストは ipo-browser + ht
 | 2026-04-22 | Phase 4 Sprint 8 の先行タスクとして、新サービス `ipo-applier` + `ApplyForLotteryUseCase` (DD-101) を実装。`services/ipo-applier/` に DI container + Pub/Sub push handler (`POST /internal/pubsub/apply`) + UseCase 本体を追加し、`ipo-backend-shared::services::ApplicationEligibilityService` + `SecuritiesAccountRepository::find_active` + `IpoStockRepository::find_in_book_building_period` + `ExclusionRepository::find_all` + `LotteryApplicationRepository::exists_by_stock_and_account` を組み合わせて直積ループを実行。`BrokerBrowserPort::apply_for_ipo` (ipo-api の override を ipo-applier 側にも BrowserServiceClient として実装) 経由で `ipo-browser` に委譲し、成功時は `LotteryApplication.apply()` + Firestore `save` + `ApplicationCompleted` publish、失敗系は `ApplicationFailed` publish + `OperationLog` に `OperationEventType::ApplyLottery` で記録。docker-compose に ipo-applier (PORT=8084) + Dockerfile 追加、ci.yml の Wait for services と docker-compose-smoke に `/health` + `/internal/pubsub/apply` の smoke を追加。unit+integration 9 tests (use case 3 + router 2 + BrowserServiceClient 4) すべて緑。Cloud Run / Cloud Scheduler の terraform 定義は別 PR で対応。 |
 | 2026-04-23 | Phase 7 Sprint 14 ポストMVP セキュリティ・運用ハードニングを実施。H1: per-uid rate-limit middleware (100 req/min, 429 + Retry-After)、H2: Google provider 強制 (firebase.sign_in_provider == google.com, 403)、H3: Firestore security rules (reject-all + Terraform)、H4: Cloud Audit Data Access logs + Firestore 日次/週次バックアップ (Terraform)、H5: Trivy container scan (security-scan.yml)、H6: ロードマップ + チェックリスト更新。**M7 達成**。 |
 | 2026-04-23 | Phase 7 Sprint 15 — ipo-applier Terraform + ロードマップ完了。コードベース探索で Tasks 8.1–8.6 が全て実装済みであることを確認し §10.4 を更新。`terraform/environments/{stg,prd}/terraform.tfvars` に ipo-applier Cloud Run 定義 + SA を追加 (port 8084, timeout 600s, concurrency 1)。prd の既存 `ipo_daily_trigger` scheduler が `ipo-job-trigger` topic → `ipo-apply-sub` subscription 経由で ipo-applier をトリガーする構成は変更不要。**Phase 4 Sprint 8 全タスク完了 → M4 達成**。 |
+| 2026-04-24 | Phase 8 (野村證券対応) のドキュメント整備に着手。`docs/01-requirements/nomura-broker-support.md` (要件 REQ-100〜104, REQ-NF-100〜106) / `docs/03-detailed-design/nomura-broker-adapter.md` (DD-201〜225 暫定) / `docs/09-security-design/nomura-authentication.md` / `docs/10-operations-design/nomura-integration-runbook.md` を新規作成。`docs/user-actions/` ディレクトリを新設し `nomura-broker-information-request.md` で開発者だけでは特定できない情報（サイト DOM / 2FA 方式 / credential 構造 / 利用規約 / レート制限 等）をユーザー回答待ちの形で整理。`docs/reference/nomura/` を準備。実コード変更はなし、ユーザー回答後に Sprint 16〜18 で実装。 |

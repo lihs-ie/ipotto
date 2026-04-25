@@ -390,6 +390,8 @@ PC / スマホ共通
 **URLパターン:** `/settings/accounts`
 **対応機能:** [SD-007](../02-system-design/system-design.md#sd-007)
 
+> **Phase 8 補足**: 証券会社プルダウンには `楽天証券` / `野村證券` の 2 択を表示する。野村選択時は credential 入力欄が動的に切り替わる可能性がある（[野村證券アダプター詳細設計書 § 4.2](../03-detailed-design/nomura-broker-adapter.md#42-accountcredential-の構造判断-暫定) で確定）。
+
 ```
 ┌──────────────────────────────────────┐
 │ 証券口座管理                          │

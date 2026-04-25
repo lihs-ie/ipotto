@@ -580,8 +580,8 @@ classDiagram
 | DD-051 | ExclusionIdentifier | 除外銘柄 | 文字列値の一致 | 空でないこと |
 | DD-052 | ExclusionReason | 除外銘柄 | 文字列値の一致 | 空でないこと |
 | DD-053 | SecuritiesAccountIdentifier | 証券口座 | 文字列値の一致 | 空でないこと |
-| DD-054 | SecuritiesCompany | 証券口座 | 文字列値の一致 | 定義済み証券会社名（Rakuten等）のいずれか |
-| DD-055 | AccountCredential | 証券口座 | 全フィールドの一致 | loginId、loginPassword、tradingPassword、mailCredentialが全て設定されていること |
+| DD-054 | SecuritiesCompany | 証券口座 | 文字列値の一致 | 定義済み証券会社名のいずれか。Phase 1 MVP は `Rakuten`、Phase 8 で `Nomura` を追加（[野村證券アダプター詳細設計書](./nomura-broker-adapter.md) DD-201 参照） |
+| DD-055 | AccountCredential | 証券口座 | 全フィールドの一致 | loginId、loginPassword、tradingPassword、mailCredentialが全て設定されていること。**注**: Phase 8 で broker 別構造への可変化を検討（[DD-202](./nomura-broker-adapter.md#21-ドメイン層) 参照） |
 | DD-056 | LoginId | 証券口座 | 文字列値の一致 | 空でないこと |
 | DD-056a | LoginPassword | 証券口座 | 文字列値の一致 | 空でないこと |
 | DD-056b | TradingPassword | 証券口座 | 文字列値の一致 | 空でないこと |
